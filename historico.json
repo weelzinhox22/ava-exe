@@ -425,5 +425,49 @@
       }
     ],
     "data": "2026-03-27T22:56:20.280Z"
+  },
+  {
+    "status": "success",
+    "disciplina": "Fisioterapia na Atenção Terciária",
+    "estado": "Finalizada",
+    "tempo_empregado": "Tempo empregado",
+    "notas": "2,00/3,00",
+    "aproveitamento": "67%",
+    "tempo_execucao": "120.0s",
+    "questoes": [
+      {
+        "question": 1,
+        "text": "O AVE atinge pessoas de todas as idades, sendo raro na infância. Deve ser considerado como um ataque cerebral, pois é a ",
+        "answer": "o fisioterapeuta deve iniciar exercícios de movime",
+        "source": "oryon"
+      },
+      {
+        "question": 2,
+        "text": "A incapacidade funcional é uma das sequelas mais importantes em decorrência do AVE aliando-se a diminuição da função cog",
+        "answer": "Alongamentos e mobilizações passivas do membro aco",
+        "source": "oryon"
+      },
+      {
+        "question": 3,
+        "text": "De acordo com a Organização Mundial de Saúde (OMS, 2010) os Acidentes Cerebrovasculares são definidos como uma síndrome ",
+        "answer": "V- V- F.",
+        "source": "oryon"
+      }
+    ],
+    "data": "2026-03-28T03:41:14.401Z",
+    "erros_potenciais": [
+      {
+        "questao": "O AVE atinge pessoas de todas as idades, sendo raro na infância. Deve ser considerado como um ataque cerebral, pois é a ",
+        "resposta_ia": "o fisioterapeuta deve iniciar exercícios de movime"
+      },
+      {
+        "questao": "A incapacidade funcional é uma das sequelas mais importantes em decorrência do AVE aliando-se a diminuição da função cog",
+        "resposta_ia": "Alongamentos e mobilizações passivas do membro aco"
+      },
+      {
+        "questao": "De acordo com a Organização Mundial de Saúde (OMS, 2010) os Acidentes Cerebrovasculares são definidos como uma síndrome ",
+        "resposta_ia": "V- V- F."
+      }
+    ]
   }
 ]

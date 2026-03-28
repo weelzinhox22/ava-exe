@@ -4,7 +4,7 @@
 // Exportável para Express API / Next.js / qualquer backend
 // ============================================================
 
-const { chromium } = require('playwright');
+const { chromium } = require('playwright-core');
 const Groq = require('groq-sdk');
 const fs = require('fs');
 const path = require('path');
@@ -216,6 +216,78 @@ async function searchGoogle(context, questionText, optionsMap, emit) {
 }
 
 // ══════════════════════════════════════════════════════════════
+// launchBrowserWithFallback — Tenta navegadores locais do Windows
+// Ordem: Chrome → Edge → Brave → Opera
+// ══════════════════════════════════════════════════════════════
+
+async function launchBrowserWithFallback(headless, emit = () => {}) {
+  const os = require('os');
+  const userHome = os.homedir();
+
+  // 1. Navegadores com canal nativo do Playwright (Chrome / Edge)
+  const channels = ['chrome', 'msedge'];
+  for (const channel of channels) {
+    try {
+      emit('log', `[BROWSER] Tentando canal: ${channel}...`);
+      const browser = await chromium.launch({ channel, headless, slowMo: 200 });
+      emit('log', `[BROWSER] ✅ Conectado via canal "${channel}".`);
+      return browser;
+    } catch (e) {
+      emit('log', `[BROWSER] ❌ Canal "${channel}" indisponível: ${e.message.split('\n')[0]}`);
+    }
+  }
+
+  // 2. Navegadores com caminho de executável personalizado (Brave / Opera)
+  const customBrowsers = [
+    {
+      name: 'Brave',
+      paths: [
+        'C:\\Program Files\\BraveSoftware\\Brave-Browser\\Application\\brave.exe',
+        'C:\\Program Files (x86)\\BraveSoftware\\Brave-Browser\\Application\\brave.exe',
+        path.join(userHome, 'AppData', 'Local', 'BraveSoftware', 'Brave-Browser', 'Application', 'brave.exe'),
+      ],
+    },
+    {
+      name: 'Opera',
+      paths: [
+        path.join(userHome, 'AppData', 'Local', 'Programs', 'Opera', 'launcher.exe'),
+        path.join(userHome, 'AppData', 'Local', 'Programs', 'Opera', 'opera.exe'),
+        'C:\\Program Files\\Opera\\launcher.exe',
+        'C:\\Program Files (x86)\\Opera\\launcher.exe',
+      ],
+    },
+  ];
+
+  for (const { name, paths } of customBrowsers) {
+    for (const execPath of paths) {
+      if (!fs.existsSync(execPath)) continue;
+      try {
+        emit('log', `[BROWSER] Tentando ${name} em: ${execPath}...`);
+        const browser = await chromium.launch({ executablePath: execPath, headless, slowMo: 200 });
+        emit('log', `[BROWSER] ✅ Conectado via ${name}.`);
+        return browser;
+      } catch (e) {
+        emit('log', `[BROWSER] ❌ ${name} falhou: ${e.message.split('\n')[0]}`);
+      }
+    }
+  }
+
+  // 3. Fallback final: Chromium interno do Playwright (download necessário)
+  emit('log', '[BROWSER] ⚠️ Nenhum navegador local encontrado. Tentando Chromium interno do Playwright...');
+  try {
+    const browser = await chromium.launch({ headless, slowMo: 200 });
+    emit('log', '[BROWSER] ✅ Conectado via Chromium interno.');
+    return browser;
+  } catch (e) {
+    throw new Error(
+      `Nenhum navegador compatível encontrado no sistema.\n` +
+      `Instale Google Chrome, Microsoft Edge, Brave ou Opera.\n` +
+      `Detalhe técnico: ${e.message.split('\n')[0]}`
+    );
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
 // createSession — Inicia o Playwright browser
 // ══════════════════════════════════════════════════════════════
 
@@ -223,7 +295,7 @@ async function createSession(emit = () => {}, showBrowser = true) {
   const id = Date.now().toString(36) + Math.random().toString(36).substring(2, 6);
   emit('log', '[ORYON] Iniciando sistema central (Browser)...');
 
-  const browser = await chromium.launch({ headless: !showBrowser, slowMo: 200 });
+  const browser = await launchBrowserWithFallback(!showBrowser, emit);
   const context = await browser.newContext({
     viewport: { width: 1366, height: 768 },
     userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36',
@@ -422,60 +494,51 @@ async function selectDisciplina(sessionId, targetInfo, emit = () => {}) {
 
   emit('log', `📖 Acessando: "${titulo}"...`);
 
-  try {
-    const urlValid = id && id.includes('course/view');
-    if (urlValid) {
-      emit('log', '[ORYON] Navegação iniciada. Aguardando carregamento da disciplina...');
-      await Promise.all([
-        page.waitForNavigation({ waitUntil: 'networkidle', timeout: 30000 }).catch(() => {}),
-        page.goto(id)
-      ]);
-    } else {
-      // 1ª Estratégia: Filtro de card + click force
-      emit('log', 'Tentando clicar no botão interno do card...');
+  // Estratégia 1: Navegação direta por URL (mais confiável)
+  const urlValid = id && (id.includes('course/view') || id.startsWith('http'));
+  if (urlValid) {
+    try {
+      await page.goto(id, { waitUntil: 'domcontentloaded', timeout: 30000 });
+    } catch (e) {
+      emit('log', `[AVISO] Falha na navegação direta: ${e.message}`);
+    }
+  } else {
+    // Estratégia 2: Clique no card do AVA
+    let clicked = false;
+
+    // 2a: Filtro de card + click no link interno (silencioso)
+    try {
       const card = page.locator('.card-item').filter({ hasText: titulo });
       const btn = card.locator('.card-action a, .card-action button, a').first();
-      await btn.waitFor({ timeout: 10000 });
-      
-      emit('log', '[ORYON] Navegação iniciada. Aguardando carregamento da disciplina...');
+      await btn.waitFor({ timeout: 8000 });
       await Promise.all([
-        page.waitForNavigation({ waitUntil: 'networkidle', timeout: 30000 }).catch(() => {}),
+        page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 30000 }).catch(() => {}),
         btn.click({ force: true })
       ]);
-    }
-  } catch {
-    emit('log', 'Fallback de clique por texto solto...');
-    try {
-      if (id && id.startsWith('http')) {
-        emit('log', '[ORYON] Navegação iniciada. Aguardando carregamento da disciplina...');
+      clicked = true;
+    } catch {}
+
+    // 2b: Fallback por texto (silencioso — sem log de aviso pro usuário)
+    if (!clicked) {
+      try {
+        const kw = titulo.split(/\s+/).filter((w) => w.length > 3)
+          .map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).slice(0, 3).join('.*');
         await Promise.all([
-          page.waitForNavigation({ waitUntil: 'networkidle', timeout: 30000 }).catch(() => {}),
-          page.goto(id)
+          page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 30000 }).catch(() => {}),
+          page.locator(`text=/${kw}/i`).first().click({ force: true, timeout: 8000 })
         ]);
-      } else {
-        const kw = titulo.split(/\s+/).filter((w) => w.length > 3).map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).slice(0, 3).join('.*');
-        emit('log', '[ORYON] Navegação iniciada. Aguardando carregamento da disciplina...');
-        await Promise.all([
-          page.waitForNavigation({ waitUntil: 'networkidle', timeout: 30000 }).catch(() => {}),
-          page.locator(`text=/${kw}/i`).first().click({ force: true })
-        ]);
-      }
-    } catch (e) {
-      emit('log', `[AVISO] Clique falhou: ${e.message}`);
+      } catch {}
     }
   }
 
+  // Aguardar estabilização e botão de acesso opcional
   await safeWait(page);
-  await delay(2000);
-
-  // Botão genérico de acesso
+  await delay(1500);
   try {
     await clickByText(page, 'ACESSAR A DISCIPLINA');
-    emit('log', '[SUCESSO] Acessando aula...');
+    emit('log', '[SUCESSO] Acessando disciplina...');
   } catch {}
-
-  await safeWait(page);
-  await delay(3000);
+  await delay(2000);
   return { success: true };
 }
 
@@ -690,10 +753,12 @@ async function clickItem(sessionId, target, emit = () => {}) {
 // resolverAtividade — Resolve o questionário inteiro
 // ══════════════════════════════════════════════════════════════
 
-async function resolverAtividade(sessionId, disciplina, groqKey, emit = () => {}) {
+async function resolverAtividade(sessionId, disciplina, groqKey, emit = () => {}, userDataPath = '') {
   const { page } = getSession(sessionId);
   const startTime = Date.now();
   const answersLog = [];
+  // Referência ao userData path para persistência segura no Windows (passado pelo main.js)
+  const __userDataPath = userDataPath;
 
   // 0. Limpar banners ANTES de tudo
   emit('log', '🧹 Limpando banners de cookies e modais...');
@@ -962,11 +1027,32 @@ async function resolverAtividade(sessionId, disciplina, groqKey, emit = () => {}
         let actTitle = 'Atividade_Generica';
         try { actTitle = await page.title(); } catch(e) {}
 
-        const folderDir = path.join(process.cwd(), 'Historico', sanitize(disciplina), sanitize(secaoTitle));
+        const baseDir = (typeof __userDataPath === 'string' && __userDataPath) ? __userDataPath : (process.env.APPDATA ? path.join(process.env.APPDATA, 'Studio Oryon') : process.cwd());
+        const folderDir = path.join(baseDir, 'Historico', sanitize(disciplina), sanitize(secaoTitle));
         if (!fs.existsSync(folderDir)) fs.mkdirSync(folderDir, { recursive: true });
-        const filePath = path.join(folderDir, `${sanitize(actTitle)}.md`);
+        const filePath = path.join(folderDir, `${sanitize(actTitle)}.txt`);
         
-        const logData = `### Questão ${n}\n**Enunciado:**\n${text}\n\n**Alternativas:**\n${formattedAlts}\n**Resposta Escolhida (Studio Oryon):**\n${targetOpt.textoOriginal}\n\n**Confiança/Similaridade:** ${finalMatchPerc}%\n\n> [USUÁRIO]: Verifique se a resposta acima está correta antes de prosseguir.\n---\n`;
+        const separator = '='.repeat(60);
+        const subSep = '-'.repeat(60);
+        const logData = [
+          separator,
+          `QUESTAO ${n}`,
+          subSep,
+          `ENUNCIADO:`,
+          text,
+          '',
+          `ALTERNATIVAS:`,
+          formattedAlts.trimEnd(),
+          '',
+          `RESPOSTA ESCOLHIDA (Studio Oryon):`,
+          targetOpt.textoOriginal,
+          '',
+          `CONFIANCA / SIMILARIDADE: ${finalMatchPerc}%`,
+          '',
+          `[ATENCAO] Verifique se a resposta acima esta correta antes de prosseguir.`,
+          separator,
+          '',
+        ].join('\n');
         fs.appendFileSync(filePath, logData, 'utf-8');
         
         emit('log', '[ORYON] Questão salva no histórico para conferência.');
@@ -1161,7 +1247,9 @@ async function resolverAtividade(sessionId, disciplina, groqKey, emit = () => {}
   }
 
   try {
-    const histPath = path.join(__dirname, 'historico.json');
+    const histBaseDir = (typeof __userDataPath === 'string' && __userDataPath) ? __userDataPath : (process.env.APPDATA ? path.join(process.env.APPDATA, 'Studio Oryon') : process.cwd());
+    if (!fs.existsSync(histBaseDir)) fs.mkdirSync(histBaseDir, { recursive: true });
+    const histPath = path.join(histBaseDir, 'historico.json');
     let historico = [];
     if (fs.existsSync(histPath)) {
       historico = JSON.parse(fs.readFileSync(histPath, 'utf-8'));

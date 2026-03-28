@@ -7,7 +7,7 @@
 require('dotenv').config();
 const fs = require('fs');
 const path = require('path');
-const { chromium } = require('playwright');
+const { chromium } = require('playwright-core');
 const Groq = require('groq-sdk');
 const chalk = require('chalk');
 const Table = require('cli-table3');

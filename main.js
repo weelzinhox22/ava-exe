@@ -3,6 +3,7 @@ const path = require('path');
 const Store = require('electron-store');
 const fs = require('fs');
 const auto = require('./automation');
+const { autoUpdater } = require('electron-updater');
 
 require('dotenv').config();
 const { createClient } = require('@supabase/supabase-js');
@@ -27,6 +28,33 @@ const store = new Store();
 let mainWindow;
 let currentSession = null;
 let currentDisciplina = null;
+
+// ── Caminho de dados do usuário (AppData/Roaming/Studio Oryon) ──
+const userDataPath = path.join(app.getPath('userData'));
+// Garantir que o diretório de histórico exista no AppData
+const historicoDir = path.join(userDataPath, 'Historico');
+if (!fs.existsSync(historicoDir)) {
+  try { fs.mkdirSync(historicoDir, { recursive: true }); } catch(e) { console.error('[ORYON] Falha ao criar pasta Histórico:', e.message); }
+}
+
+// ── Higiene de Segurança: remover arquivos legados da raiz do app ──
+// (Windows bloqueia escrita na pasta do .exe instalado, e dados sensíveis não devem ficar lá)
+try {
+  // 1. user.json legado (credenciais em texto plano) — removido, substituído pelo electron-store criptografado
+  const legacyUser = path.join(__dirname, 'user.json');
+  if (fs.existsSync(legacyUser)) { fs.unlinkSync(legacyUser); console.log('[ORYON] Arquivo legado user.json removido da raiz.'); }
+
+  // 2. historico.json na raiz → migrar para AppData e remover original
+  const legacyHist = path.join(__dirname, 'historico.json');
+  const newHist    = path.join(userDataPath, 'historico.json');
+  if (fs.existsSync(legacyHist)) {
+    if (!fs.existsSync(newHist)) {
+      fs.copyFileSync(legacyHist, newHist);
+      console.log('[ORYON] historico.json migrado para AppData.');
+    }
+    fs.unlinkSync(legacyHist);
+  }
+} catch (e) { console.warn('[ORYON] Higiene de arquivos legados falhou (normal no dev):', e.message); }
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -71,7 +99,68 @@ app.whenReady().then(() => {
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
+
+  // ── Auto-Updater: verificar silenciosamente 3s após o app abrir ──
+  setTimeout(() => setupAutoUpdater(), 3000);
 });
+
+// ════════════════════════════════════════════════
+// AUTO-UPDATER
+// ════════════════════════════════════════════════
+function setupAutoUpdater() {
+  // Não verificar em modo dev (sem squirrel)
+  if (!app.isPackaged) {
+    console.log('[UPDATER] Modo dev: verificação de update desativada.');
+    return;
+  }
+
+  autoUpdater.autoDownload = false;          // Apenas notificar, não baixar sozinho
+  autoUpdater.autoInstallOnAppQuit = false;  // Instalar apenas quando o usuário pedir
+
+  // Evento: update disponível
+  autoUpdater.on('update-available', (info) => {
+    console.log(`[UPDATER] Nova versão disponível: v${info.version}`);
+    emit('updater', {
+      status: 'available',
+      version: info.version,
+      releaseNotes: info.releaseNotes || ''
+    });
+  });
+
+  // Evento: app já é a versão mais recente
+  autoUpdater.on('update-not-available', () => {
+    console.log('[UPDATER] App está atualizado.');
+    emit('updater', { status: 'up-to-date' });
+  });
+
+  // Evento: progresso do download
+  autoUpdater.on('download-progress', (progress) => {
+    emit('updater', {
+      status: 'downloading',
+      percent: Math.round(progress.percent),
+      transferred: (progress.transferred / 1024 / 1024).toFixed(1),
+      total: (progress.total / 1024 / 1024).toFixed(1),
+      speed: (progress.bytesPerSecond / 1024).toFixed(0)
+    });
+  });
+
+  // Evento: download concluído
+  autoUpdater.on('update-downloaded', (info) => {
+    console.log(`[UPDATER] v${info.version} pronto para instalar.`);
+    emit('updater', { status: 'downloaded', version: info.version });
+  });
+
+  // Evento: erro
+  autoUpdater.on('error', (err) => {
+    console.error('[UPDATER] Erro:', err.message);
+    emit('updater', { status: 'error', message: err.message });
+  });
+
+  // Verificar agora
+  autoUpdater.checkForUpdates().catch((e) => {
+    console.error('[UPDATER] Falha ao verificar:', e.message);
+  });
+}
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
@@ -253,7 +342,7 @@ ipcMain.handle('auto:resolver', async (event, data) => {
   if (!currentSession) throw new Error('Faça login primeiro.');
 
   const disciplina = data.disciplina || currentDisciplina || 'Geral';
-  return await auto.resolverAtividade(currentSession, disciplina, groqKey, emit);
+  return await auto.resolverAtividade(currentSession, disciplina, groqKey, emit, userDataPath);
 });
 
 ipcMain.handle('auto:logout', async () => {
@@ -264,3 +353,38 @@ ipcMain.handle('auto:logout', async () => {
   }
   return { success: true };
 });
+
+// Abre a pasta de Histórico no Explorer do Windows
+ipcMain.handle('shell:openHistorico', async () => {
+  const folderPath = path.join(userDataPath, 'Historico');
+  if (!fs.existsSync(folderPath)) {
+    fs.mkdirSync(folderPath, { recursive: true });
+  }
+  await shell.openPath(folderPath);
+  return { success: true };
+});
+
+// ── IPC: Updater ──────────────────────────────────────────────
+ipcMain.handle('updater:check', async () => {
+  if (!app.isPackaged) return { status: 'dev-mode' };
+  try {
+    await autoUpdater.checkForUpdates();
+    return { status: 'checking' };
+  } catch (e) {
+    return { status: 'error', message: e.message };
+  }
+});
+
+ipcMain.handle('updater:download', async () => {
+  try {
+    autoUpdater.downloadUpdate();
+    return { status: 'started' };
+  } catch (e) {
+    return { status: 'error', message: e.message };
+  }
+});
+
+ipcMain.handle('updater:install', () => {
+  autoUpdater.quitAndInstall(false, true); // isSilent=false, isForceRunAfter=true
+});
+

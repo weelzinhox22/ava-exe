@@ -32,25 +32,35 @@
       "dist-main.js",
       "preload.js",
       "public/**/*",
-      "node_modules/**/*",
+      "package.json",
+      "node_modules/playwright-core/**/*",
+      "node_modules/@playwright/**/*",
+      "!node_modules/.bin",
       "!supabase",
       "!.env*"
     ],
     "extraMetadata": {
       "main": "dist-main.js"
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "weelzinhox22",
+      "repo": "ava-exe",
+      "releaseType": "release"
     }
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.100.1",
     "chalk": "^4.1.2",
     "cli-table3": "^0.6.5",
     "dotenv": "^16.6.1",
+    "electron-updater": "^6.3.9",
     "express": "^5.2.1",
     "groq-sdk": "^0.8.0",
     "node-machine-id": "^1.1.12",
-    "playwright": "^1.49.0"
+    "playwright-core": "^1.58.2"
   },
   "devDependencies": {
-    "@supabase/supabase-js": "^2.100.1",
     "electron": "^41.1.0",
     "electron-builder": "^26.8.1",
     "electron-store": "^8.1.0",

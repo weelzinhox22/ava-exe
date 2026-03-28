@@ -11,6 +11,49 @@
 <body>
   <div class="app">
 
+    <!-- Barra de Atualização (oculta por padrão, controlada pelo app.js) -->
+    <div id="updateBar" style="
+      display: none;
+      align-items: center; justify-content: space-between;
+      background: linear-gradient(135deg, rgba(99,102,241,0.18), rgba(59,130,246,0.12));
+      border: 1px solid rgba(99,102,241,0.4);
+      border-radius: 12px; padding: 14px 22px; margin-bottom: 18px;
+      gap: 16px; flex-wrap: wrap;
+      animation: fadeIn 0.4s ease;
+    ">
+      <div style="display:flex; align-items:center; gap:12px; flex:1;">
+        <i class="ph-fill ph-arrow-circle-up" style="font-size:22px; color:#818cf8;"></i>
+        <div>
+          <div id="updateBarTitle" style="font-weight:700; font-size:14px; color:#e0e7ff;">Nova versão disponível!</div>
+          <div id="updateBarSub" style="font-size:12px; color:#94a3b8; margin-top:2px;">Clique em Atualizar para baixar em segundo plano.</div>
+        </div>
+      </div>
+      <div style="display:flex; align-items:center; gap:10px; flex-shrink:0;">
+        <div id="updateProgress" style="display:none; font-size:12px; color:#94a3b8; min-width:120px; text-align:right;">
+          <div id="updateProgressText">Baixando...</div>
+          <div style="background:rgba(255,255,255,0.1); border-radius:4px; height:4px; margin-top:4px; overflow:hidden;">
+            <div id="updateProgressBar" style="height:100%; background:linear-gradient(90deg,#6366f1,#3b82f6); width:0%; transition:width 0.3s ease; border-radius:4px;"></div>
+          </div>
+        </div>
+        <button id="btnUpdate" onclick="handleUpdate()" style="
+          display:inline-flex; align-items:center; gap:7px;
+          padding:9px 18px; border-radius:9px; font-size:13px; font-weight:700;
+          background:linear-gradient(135deg,#6366f1,#3b82f6); color:#fff;
+          border:none; cursor:pointer; white-space:nowrap;
+          box-shadow:0 0 15px rgba(99,102,241,0.4); transition:all 0.2s;
+        "
+        onmouseover="this.style.transform='translateY(-1px)'; this.style.boxShadow='0 0 25px rgba(99,102,241,0.6)'"
+        onmouseout="this.style.transform=''; this.style.boxShadow='0 0 15px rgba(99,102,241,0.4)'"
+        >
+          <i class="ph-bold ph-download-simple"></i>
+          <span id="btnUpdateLabel">Atualizar Agora</span>
+        </button>
+        <button onclick="document.getElementById('updateBar').style.display='none'" style="
+          background:none; border:none; color:#64748b; cursor:pointer; font-size:18px; padding:4px; line-height:1;
+        " title="Dispensar">✕</button>
+      </div>
+    </div>
+
     <!-- Header -->
     <header class="header">
       <div class="header-left">
@@ -29,7 +72,7 @@
           <span class="status-dot" style="background:#10b981; animation: none; box-shadow: 0 0 8px #10b981;"></span>
           <span id="licenseText">Premium</span>
         </div>
-        <button class="btn btn-outline btn-sm" id="btnRenovar" style="display:none" onclick="window.electronAPI.send('open-link', 'https://studiooryon.pro/assinatura')"><i class="ph-bold ph-credit-card"></i> Renovar Assinatura</button>
+        <button class="btn btn-outline btn-sm" id="btnRenovar" style="display:none" onclick="window.electronAPI.send('open-link', 'https://mpago.li/2kLegqy')"><i class="ph-bold ph-credit-card"></i> Renovar Assinatura</button>
         <button class="btn btn-danger btn-sm" id="btnLogout" style="display:none" onclick="logout()"><i class="ph ph-sign-out"></i> Sair</button>
       </div>
     </header>

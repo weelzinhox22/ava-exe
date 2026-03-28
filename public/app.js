@@ -121,9 +121,80 @@ function connectSSE() {
         }
       } else if (msg.type === 'done') {
         showResult(msg.data);
+      } else if (msg.type === 'updater') {
+        handleUpdaterEvent(msg.data);
       }
     } catch {}
   });
+}
+
+// ── Auto-Updater UI ───────────────────────────────────
+// Estado interno do updater
+let _updaterState = 'idle'; // idle | available | downloading | downloaded
+
+function handleUpdaterEvent(data) {
+  const bar      = document.getElementById('updateBar');
+  const title    = document.getElementById('updateBarTitle');
+  const sub      = document.getElementById('updateBarSub');
+  const progress = document.getElementById('updateProgress');
+  const progText = document.getElementById('updateProgressText');
+  const progBar  = document.getElementById('updateProgressBar');
+  const btnLabel = document.getElementById('btnUpdateLabel');
+  const btn      = document.getElementById('btnUpdate');
+  if (!bar) return;
+
+  if (data.status === 'available') {
+    _updaterState = 'available';
+    title.textContent = `⚡ Nova versão v${data.version} disponível!`;
+    sub.textContent   = 'Baixe e instale agora sem precisar fechar o software.';
+    progress.style.display = 'none';
+    btnLabel.textContent   = 'Atualizar Agora';
+    btn.disabled = false;
+    bar.style.display = 'flex';
+    addLog(`[ORYON] ⚡ Atualização disponível: v${data.version}. Clique em "Atualizar Agora" na barra acima.`);
+
+  } else if (data.status === 'downloading') {
+    _updaterState = 'downloading';
+    title.textContent = `⏬ Baixando v... ${data.percent}%`;
+    sub.textContent   = `${data.transferred} MB / ${data.total} MB — ${data.speed} KB/s`;
+    progress.style.display = 'block';
+    progText.textContent   = `${data.percent}% — ${data.transferred}/${data.total} MB`;
+    progBar.style.width    = `${data.percent}%`;
+    btnLabel.textContent   = 'Baixando...';
+    btn.disabled = true;
+    bar.style.display = 'flex';
+
+  } else if (data.status === 'downloaded') {
+    _updaterState = 'downloaded';
+    title.textContent = `✅ Versão v${data.version} pronta!`;
+    sub.textContent   = 'Download concluído. Clique para instalar e reiniciar o app.';
+    progBar.style.width    = '100%';
+    progText.textContent   = 'Concluído!';
+    btnLabel.textContent   = 'Instalar e Reiniciar';
+    btn.disabled = false;
+    bar.style.display = 'flex';
+    addLog('[ORYON] ✅ Download da atualização concluído! Clique em "Instalar e Reiniciar" quando quiser.');
+
+  } else if (data.status === 'error') {
+    _updaterState = 'idle';
+    addLog(`[AVISO] Falha no updater: ${data.message}`);
+  }
+}
+
+async function handleUpdate() {
+  if (_updaterState === 'available') {
+    // Iniciar download
+    await window.electronAPI.updaterDownload();
+    _updaterState = 'downloading';
+    document.getElementById('btnUpdateLabel').textContent = 'Baixando...';
+    document.getElementById('btnUpdate').disabled = true;
+
+  } else if (_updaterState === 'downloaded') {
+    // Instalar e reiniciar
+    if (confirm('O app vai reiniciar para aplicar a atualização. Deseja continuar?')) {
+      window.electronAPI.updaterInstall();
+    }
+  }
 }
 
 function addLog(text) {
@@ -190,12 +261,23 @@ function createItemCard(text, index, onclick) {
     <div class="item-num">${index + 1}</div>
     <div class="item-name">${text}</div>
   `;
-  card.onclick = () => {
+  let _isLoading = false;
+  card.addEventListener('click', async () => {
+    if (_isLoading) return; // Guard contra duplo clique durante carregamento
     const parent = card.parentElement;
     parent.querySelectorAll('.item-card').forEach(c => c.classList.remove('selected'));
     card.classList.add('selected');
-    onclick();
-  };
+    _isLoading = true;
+    card.style.opacity = '0.7';
+    card.style.pointerEvents = 'none';
+    try {
+      await onclick();
+    } finally {
+      _isLoading = false;
+      card.style.opacity = '';
+      card.style.pointerEvents = '';
+    }
+  });
   return card;
 }
 // ── API IPC ─────────────────────────────────────────────────
@@ -447,6 +529,22 @@ function showResult(data) {
         <button class="btn btn-primary" onclick="refazerQuestionario()"><i class="ph-bold ph-arrows-clockwise"></i> Refazer este Questionário</button>
         <button class="btn btn-success" onclick="voltarSeccoes()"><i class="ph-bold ph-arrow-u-up-left"></i> Voltar para Unidade Atual</button>
         <button class="btn btn-ghost" onclick="voltarDisciplinas()"><i class="ph-bold ph-house"></i> Voltar para Disciplinas</button>
+        <button
+          id="btnAbrirHistorico"
+          onclick="abrirHistorico()"
+          style="
+            display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+            padding: 10px 18px; border-radius: 10px; font-size: 13px; font-weight: 600;
+            cursor: pointer; border: 1.5px solid rgba(251,191,36,0.45);
+            background: linear-gradient(135deg, rgba(251,191,36,0.12), rgba(245,158,11,0.08));
+            color: #fbbf24; transition: all 0.25s ease;
+          "
+          onmouseover="this.style.background='linear-gradient(135deg,rgba(251,191,36,0.22),rgba(245,158,11,0.16))'; this.style.borderColor='rgba(251,191,36,0.7)'; this.style.transform='translateY(-1px)'"
+          onmouseout="this.style.background='linear-gradient(135deg,rgba(251,191,36,0.12),rgba(245,158,11,0.08))'; this.style.borderColor='rgba(251,191,36,0.45)'; this.style.transform=''"
+        >
+          <i class="ph-bold ph-folder-open" style="font-size:15px;"></i>
+          Ver Histórico Salvo (AppData)
+        </button>
       </div>
     `;
   }
@@ -457,6 +555,25 @@ async function refazerQuestionario() {
   addLog('<i class="ph-bold ph-arrows-clockwise ph-spin"></i> Solicitando nova tentativa...');
   showStep(3); // Volta para a tela de Seções onde o botão Iniciar Automação está
   els.btnResolver.style.display = 'inline-flex';
+}
+
+async function abrirHistorico() {
+  const btn = document.getElementById('btnAbrirHistorico');
+  if (btn) {
+    btn.innerHTML = '<i class="ph-bold ph-spinner-gap" style="animation:spin 0.8s linear infinite;font-size:15px;"></i> Abrindo...';
+    btn.style.pointerEvents = 'none';
+  }
+  try {
+    await window.electronAPI.openHistorico();
+    addLog('[ORYON] 📂 Pasta de Histórico aberta no Explorer.');
+  } catch (e) {
+    addLog(`[ERRO] Não foi possível abrir a pasta: ${e.message}`);
+  } finally {
+    if (btn) {
+      btn.innerHTML = '<i class="ph-bold ph-folder-open" style="font-size:15px;"></i> Ver Histórico Salvo (AppData)';
+      btn.style.pointerEvents = '';
+    }
+  }
 }
 
 async function voltarSeccoes() {
