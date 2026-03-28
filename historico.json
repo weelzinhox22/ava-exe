@@ -395,5 +395,35 @@
     "tempo_execucao": "60.0s",
     "questoes": [],
     "data": "2026-03-27T21:57:56.176Z"
+  },
+  {
+    "status": "success",
+    "disciplina": "Fisioterapia Musculoesquelética na Saúde do Adulto",
+    "estado": "Finalizada",
+    "tempo_empregado": "Tempo empregado",
+    "notas": "3,00/3,00",
+    "aproveitamento": "100%",
+    "tempo_execucao": "131.9s",
+    "questoes": [
+      {
+        "question": 1,
+        "text": "O tratamento fisioterapêutico na reabilitação da lesão medular (TRM), por se tratar de uma lesão grave, a fase aguda apr",
+        "answer": "V, V, V, F.",
+        "source": "oryon"
+      },
+      {
+        "question": 2,
+        "text": "Sobre a biomecânica da coluna vertebral analise o texto abaixo e complete as lacunas:\n“Além dos músculos profundos _____",
+        "answer": "multífidos, transverso do abdome, diafragma.",
+        "source": "oryon"
+      },
+      {
+        "question": 3,
+        "text": "Recurso que pode ser utilizado para o alívio da dor, se trata de correntes elétricas excitomotoras, que agem em pontos m",
+        "answer": "Eletroterapia.",
+        "source": "oryon"
+      }
+    ],
+    "data": "2026-03-27T22:56:20.280Z"
   }
 ]

@@ -2,16 +2,58 @@
   "name": "ava-automacao",
   "version": "1.0.0",
   "description": "Automação de questionário AVA Kroton com Playwright + Groq SDK",
-  "main": "server.js",
+  "main": "main.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "electron .",
+    "prebuild": "node build.js",
+    "build:win": "npm run prebuild && electron-builder --win",
+    "dist": "npm run prebuild && electron-builder --win --x64"
+  },
+  "build": {
+    "appId": "com.studiooryon.ava",
+    "productName": "Studio Oryon",
+    "copyright": "Copyright © 2026 Studio Oryon",
+    "directories": {
+      "output": "dist"
+    },
+    "win": {
+      "target": "nsis",
+      "icon": "public/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "installerIcon": "public/icon.ico",
+      "uninstallerIcon": "public/icon.ico",
+      "uninstallDisplayName": "Studio Oryon Uninstaller",
+      "artifactName": "Studio_Oryon_Setup_v${version}.${ext}"
+    },
+    "files": [
+      "dist-main.js",
+      "preload.js",
+      "public/**/*",
+      "node_modules/**/*",
+      "!supabase",
+      "!.env*"
+    ],
+    "extraMetadata": {
+      "main": "dist-main.js"
+    }
   },
   "dependencies": {
     "chalk": "^4.1.2",
     "cli-table3": "^0.6.5",
-    "dotenv": "^16.4.0",
+    "dotenv": "^16.6.1",
     "express": "^5.2.1",
     "groq-sdk": "^0.8.0",
+    "node-machine-id": "^1.1.12",
     "playwright": "^1.49.0"
+  },
+  "devDependencies": {
+    "@supabase/supabase-js": "^2.100.1",
+    "electron": "^41.1.0",
+    "electron-builder": "^26.8.1",
+    "electron-store": "^8.1.0",
+    "esbuild": "^0.27.4"
   }
 }

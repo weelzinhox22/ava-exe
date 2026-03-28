@@ -231,6 +231,11 @@ async function createSession(emit = () => {}, showBrowser = true) {
   const page = await context.newPage();
   page.setDefaultTimeout(60000);
 
+  if (!showBrowser) {
+    await page.route('**/*.{png,jpg,jpeg,gif,svg,webp,css,woff,woff2,eot}', route => route.abort());
+    emit('log', '[ORYON] Stealth Mode Ativado: Imagens e estilos bloqueados para otimização extrema.');
+  }
+
   sessions.set(id, { browser, context, page, id });
   emit('log', `[SUCESSO] Sessão criada: ${id}`);
   return id;
@@ -418,19 +423,42 @@ async function selectDisciplina(sessionId, targetInfo, emit = () => {}) {
   emit('log', `📖 Acessando: "${titulo}"...`);
 
   try {
-    // 1ª Estratégia: Filtro de card + click force
-    emit('log', 'Tentando clicar no botão interno do card...');
-    const card = page.locator('.card-item').filter({ hasText: titulo });
-    const btn = card.locator('.card-action a, .card-action button, a').first();
-    await btn.waitFor({ timeout: 10000 });
-    await btn.click({ force: true });
+    const urlValid = id && id.includes('course/view');
+    if (urlValid) {
+      emit('log', '[ORYON] Navegação iniciada. Aguardando carregamento da disciplina...');
+      await Promise.all([
+        page.waitForNavigation({ waitUntil: 'networkidle', timeout: 30000 }).catch(() => {}),
+        page.goto(id)
+      ]);
+    } else {
+      // 1ª Estratégia: Filtro de card + click force
+      emit('log', 'Tentando clicar no botão interno do card...');
+      const card = page.locator('.card-item').filter({ hasText: titulo });
+      const btn = card.locator('.card-action a, .card-action button, a').first();
+      await btn.waitFor({ timeout: 10000 });
+      
+      emit('log', '[ORYON] Navegação iniciada. Aguardando carregamento da disciplina...');
+      await Promise.all([
+        page.waitForNavigation({ waitUntil: 'networkidle', timeout: 30000 }).catch(() => {}),
+        btn.click({ force: true })
+      ]);
+    }
   } catch {
     emit('log', 'Fallback de clique por texto solto...');
     try {
-      if (id && id.startsWith('http')) await page.goto(id);
-      else {
+      if (id && id.startsWith('http')) {
+        emit('log', '[ORYON] Navegação iniciada. Aguardando carregamento da disciplina...');
+        await Promise.all([
+          page.waitForNavigation({ waitUntil: 'networkidle', timeout: 30000 }).catch(() => {}),
+          page.goto(id)
+        ]);
+      } else {
         const kw = titulo.split(/\s+/).filter((w) => w.length > 3).map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).slice(0, 3).join('.*');
-        await page.locator(`text=/${kw}/i`).first().click({ force: true });
+        emit('log', '[ORYON] Navegação iniciada. Aguardando carregamento da disciplina...');
+        await Promise.all([
+          page.waitForNavigation({ waitUntil: 'networkidle', timeout: 30000 }).catch(() => {}),
+          page.locator(`text=/${kw}/i`).first().click({ force: true })
+        ]);
       }
     } catch (e) {
       emit('log', `[AVISO] Clique falhou: ${e.message}`);
@@ -790,6 +818,7 @@ async function resolverAtividade(sessionId, disciplina, groqKey, emit = () => {}
     // ================================
     let targetOpt = null;
     let answerSource = 'nenhum';
+    let iaResponse = null;
 
     // Limpar cookies/banners ANTES de qualquer interação
     await limparBanners(page);
@@ -802,12 +831,12 @@ async function resolverAtividade(sessionId, disciplina, groqKey, emit = () => {}
       
       if (attempt > 1) {
         emit('log', `[AVISO] Match fraco na Letra A detectado. Reiniciando raciocínio... (Tentativa ${attempt}/3)`);
-        questionQuery = text + `\n\nATENÇÃO: Não responda com números (ex: "1") ou letras isoladas (ex: "A"). Retorne APENAS o texto completo da alternativa EXATA correspondente, sem explicações adicionais.`;
+        questionQuery = text + `\n\nATENÇÃO: Não responda com números (ex: "1") ou letras isoladas (ex: "A"). Retorne APENAS o texto completo da alternativa EXATA correspondente, sem explicações adicionais. Seja muito mais específico.`;
       } else {
         emit('log', `[ORYON] Analisando questão...`);
       }
 
-      const iaResponse = await askGroq(groqKey, disciplina, questionQuery, formattedAlts);
+      iaResponse = await askGroq(groqKey, disciplina, questionQuery, formattedAlts);
       
       if (!iaResponse) continue;
 
@@ -850,10 +879,16 @@ async function resolverAtividade(sessionId, disciplina, groqKey, emit = () => {}
       }
 
       if (tempOpt) {
+        // Anti-Bias Estrito na Letra A
+        if (tempOpt.idx === 0 && bestScore > 0 && bestScore < 0.70 && attempt < 3) {
+           emit('log', `[AVISO] IA cravou Letra A com confiança fraca de ${(bestScore*100).toFixed(1)}%. Suspeita de alucinação. Forçando nova reflexão.`);
+           continue; // Vai para a próxima tentativa do for loop
+        }
+
         targetOpt = tempOpt;
         answerSource = 'oryon';
-        const porcentagem = (bestScore * 100).toFixed(1);
-        emit('log', `[ORYON] Texto Groq: "${cleanAi.substring(0, 40)}" | Match AVA: "${targetOpt.textoOriginal.substring(0, 40)}" | Precisão: ${porcentagem}%`);
+        finalMatchPerc = (bestScore * 100).toFixed(1);
+        emit('log', `[ORYON] Texto Groq: "${cleanAi.substring(0, 40)}" | Match AVA: "${targetOpt.textoOriginal.substring(0, 40)}" | Precisão: ${finalMatchPerc}%`);
         break; // Match Legítimo! Sai do for loop
       }
     }
@@ -867,7 +902,8 @@ async function resolverAtividade(sessionId, disciplina, groqKey, emit = () => {}
         if (googleResult.answer && googleResult.score >= 0.4) {
           targetOpt = googleResult.answer;
           answerSource = 'oryon-search';
-          emit('log', `[SUCESSO] [ORYON] Resposta processada com ${(googleResult.score*100).toFixed(1)}% de precisão!`);
+          finalMatchPerc = (googleResult.score * 100).toFixed(1);
+          emit('log', `[SUCESSO] [ORYON] Resposta processada com ${finalMatchPerc}% de precisão!`);
         }
       } catch (e) {
         emit('log', `[AVISO] [ORYON] Validação estendida falhou: ${e.message}`);
@@ -911,6 +947,34 @@ async function resolverAtividade(sessionId, disciplina, groqKey, emit = () => {}
         try { await targetOpt.loc.click({ force: true }); } catch {}
       }
       answersLog.push({ question: n, text: text.substring(0, 120), answer: targetOpt.textoOriginal.substring(0, 50), source: answerSource });
+      
+      // ════════════════════════════════════════════
+      // GRAVAÇÃO DE HISTÓRICO LOCAL (FÍSICO)
+      // ════════════════════════════════════════════
+      try {
+        const fs = require('fs');
+        const path = require('path');
+        const sanitize = (str) => str.replace(/[^a-zA-Z0-9]/g, '_').replace(/_+/g, '_').substring(0, 50);
+        
+        let secaoTitle = 'Unidade_Generica';
+        try { secaoTitle = (await page.locator('h1').first().innerText()).trim(); } catch(e) {}
+        
+        let actTitle = 'Atividade_Generica';
+        try { actTitle = await page.title(); } catch(e) {}
+
+        const folderDir = path.join(process.cwd(), 'Historico', sanitize(disciplina), sanitize(secaoTitle));
+        if (!fs.existsSync(folderDir)) fs.mkdirSync(folderDir, { recursive: true });
+        const filePath = path.join(folderDir, `${sanitize(actTitle)}.md`);
+        
+        const logData = `### Questão ${n}\n**Enunciado:**\n${text}\n\n**Alternativas:**\n${formattedAlts}\n**Resposta Escolhida (Studio Oryon):**\n${targetOpt.textoOriginal}\n\n**Confiança/Similaridade:** ${finalMatchPerc}%\n\n> [USUÁRIO]: Verifique se a resposta acima está correta antes de prosseguir.\n---\n`;
+        fs.appendFileSync(filePath, logData, 'utf-8');
+        
+        emit('log', '[ORYON] Questão salva no histórico para conferência.');
+        const s = getSession(sessionId);
+        if (s) s.historicoPath = folderDir;
+      } catch (err) {
+        console.error('Falha ao gravar histórico local:', err.message);
+      }
     }
 
     // 5. Avançar de página + Delay Rigoroso de 2s
@@ -1037,6 +1101,11 @@ async function resolverAtividade(sessionId, disciplina, groqKey, emit = () => {}
   const finalScore = analisarScore(avaliar, notas);
 
   emit('log', `[SUCESSO] Aproveitamento final: ${finalScore} | Tempo total: ${elapsed}s`);
+  
+  const s = getSession(sessionId);
+  if (s && s.historicoPath) {
+    emit('log', `[ORYON] Histórico da Seção gerado com sucesso em: ${s.historicoPath}`);
+  }
   
   // 5. Limpeza de Interface Pós-Envio
   try {

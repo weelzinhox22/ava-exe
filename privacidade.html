@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Privacidade e LGPD — Studio Oryon</title>
   <meta name="description" content="Política de Privacidade e conformidade com a LGPD — Studio Oryon">
-  <link rel="stylesheet" href="/style.css">
+  <link rel="stylesheet" href="public/style.css">
   <script src="https://unpkg.com/@phosphor-icons/web"></script>
   <style>
     .privacy-container {
@@ -99,8 +99,9 @@
 </head>
 <body>
   <div class="app">
+    <!-- Back arrow will naturally close the electron window because it was opened independently -->
     <div class="back-nav">
-      <a href="/" class="btn-back"><i class="ph ph-arrow-left"></i> Voltar ao Sistema</a>
+      <a href="#" onclick="window.close()" class="btn-back"><i class="ph ph-arrow-left"></i> Fechar Guia e Voltar ao Sistema</a>
     </div>
 
     <main class="privacy-container">
@@ -166,7 +167,7 @@
     <footer class="footer" style="background: transparent; border: none; padding-top: 0;">
       <div class="footer-content" style="justify-content: center;">
         <div class="footer-copy" style="border: none;">
-          &copy; 2026 Studio Oryon. Powered By <a href="https://studiooryon.pro" target="_blank" rel="noopener">Studio Oryon</a>.
+          &copy; 2026 Studio Oryon. Powered By Studio Oryon | studiooryon.pro
         </div>
       </div>
     </footer>

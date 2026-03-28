@@ -47,41 +47,72 @@ window.onload = async () => {
   connectSSE();
   checkCookies();
   try {
-    const res = await fetch('/api/config');
-    const data = await res.json();
-    if (data.saved && data.login) {
-      els.inputLogin.value = data.login;
+    const creds = await window.electronAPI.storeGet('credentials');
+    if (creds && creds.login) {
+      els.inputLogin.value = creds.login;
       els.inputSenha.placeholder = "Senha salva (protegida)";
-      addLog('<i class="ph-fill ph-check-circle"></i> Credenciais salvas carregadas. Prontas para uso.');
+      addLog('[ORYON] Credenciais carregadas do cofre. Motor 120B pronto.');
+    }
+    const groqKey = await window.electronAPI.storeGet('groqKey');
+    if (groqKey) {
+      document.getElementById('inputGroqKey').placeholder = "Chave da API salva no Desktop";
+    }
+    const showBrowser = await window.electronAPI.storeGet('showBrowser');
+    if (showBrowser !== undefined) {
+      document.getElementById('checkShowBrowser').checked = showBrowser;
+    }
+    
+    const licenseKey = await window.electronAPI.storeGet('licenseKey');
+    if (licenseKey) {
+      document.getElementById('inputLicense').value = licenseKey;
+      addLog('[ORYON] Verificando licença salva em background...');
+      const lic = await window.electronAPI.invoke('auto:validateLicense', licenseKey);
+      if (lic && lic.success) {
+        document.getElementById('licenseBadge').style.display = 'flex';
+        document.getElementById('licenseText').innerText = `Premium (Até ${lic.expires_at})`;
+        document.getElementById('btnRenovar').style.display = 'block';
+      } else {
+        addLog('[ORYON] Licença de background inválida ou expirada.');
+      }
     }
   } catch (err) {
-    console.error(err);
+    console.error('Falha carregando config nativa:', err);
   }
 };
 
-// ── Cookies ─────────────────────────────────────────────────
-function checkCookies() {
-  if (localStorage.getItem('oryon_cookies_accepted') === 'true') {
+// ── Cookies & LGPD ────────────────────────────────────────────
+async function checkCookies() {
+  const accepted = await window.electronAPI.storeGet('lgpd_accepted');
+  if (accepted) {
     document.getElementById('cookieBar').style.display = 'none';
   }
 }
-function acceptCookies() {
-  localStorage.setItem('oryon_cookies_accepted', 'true');
+
+async function acceptCookies() {
+  await window.electronAPI.storeSet('lgpd_accepted', true);
   document.getElementById('cookieBar').style.display = 'none';
+  addLog('[ORYON] Consentimento LGPD registrado.');
 }
+
+// ── Link Privacidade IPC ──────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+  const linkPrivacidade = document.getElementById('link-privacidade');
+  if (linkPrivacidade) {
+    linkPrivacidade.addEventListener('click', (e) => {
+      e.preventDefault();
+      window.electronAPI.send('open-privacy');
+    });
+  }
+});
 
 // ── SSE Logs ────────────────────────────────────────────────
 function connectSSE() {
-  if (sseSource) sseSource.close();
-  sseSource = new EventSource('/api/logs');
+  els.statusBadge.classList.add('connected');
+  els.statusText.textContent = 'Desktop Engine Conectado';
   
-  sseSource.onmessage = (e) => {
+  window.electronAPI.onBackendEvent((msg) => {
     try {
-      const msg = JSON.parse(e.data);
-      if (msg.type === 'connected') {
-        els.statusBadge.classList.add('connected');
-        els.statusText.textContent = 'Servidor Conectado';
-      } else if (msg.type === 'log') {
+      if (msg.type === 'log') {
         addLog(msg.data);
       } else if (msg.type === 'status') {
         if (msg.data === 'logged_in') {
@@ -92,12 +123,7 @@ function connectSSE() {
         showResult(msg.data);
       }
     } catch {}
-  };
-  
-  sseSource.onerror = () => {
-    els.statusBadge.classList.remove('connected');
-    els.statusText.textContent = 'Tentando reconectar...';
-  };
+  });
 }
 
 function addLog(text) {
@@ -172,28 +198,27 @@ function createItemCard(text, index, onclick) {
   };
   return card;
 }
-
-// ── API Calls ───────────────────────────────────────────────
-async function fetchPost(url, body) {
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body)
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(()=>({}));
-    throw new Error(err.error || 'Erro na requisição');
+// ── API IPC ─────────────────────────────────────────────────
+async function fetchPost(channel, body = {}) {
+  let ipcChannel = channel;
+  if (channel.startsWith('/api/')) {
+    ipcChannel = 'auto:' + channel.split('/').pop();
   }
-  return res.json();
+  try {
+    const result = await window.electronAPI.invoke(ipcChannel, body);
+    if (result && result.error) throw new Error(result.error);
+    return result;
+  } catch (err) {
+    let msg = err.message || String(err);
+    if (msg.includes('Error invoking remote method')) {
+      msg = msg.split(':').slice(2).join(':').trim();
+    }
+    throw new Error(msg);
+  }
 }
 
-async function fetchGet(url) {
-  const res = await fetch(url);
-  if (!res.ok) {
-    const err = await res.json().catch(()=>({}));
-    throw new Error(err.error || 'Erro na requisição');
-  }
-  return res.json();
+async function fetchGet(channel) {
+  return fetchPost(channel, {});
 }
 
 // ── Flows ───────────────────────────────────────────────────
@@ -202,29 +227,53 @@ async function doLogin() {
   const login = els.inputLogin.value.trim();
   const senha = els.inputSenha.value;
   const save = els.checkSave.checked;
+  const groqKey = document.getElementById('inputGroqKey').value;
+  const showBrowser = document.getElementById('checkShowBrowser').checked;
+  const licenseKey = document.getElementById('inputLicense').value.trim();
   
-  if (!login) return alert('Por favor, informe seu login.');
+  if (!licenseKey) return alert('Insira a chave de licença do Studio Oryon.');
   
+  if (!login || (!senha && !els.inputSenha.placeholder.includes('salva'))) {
+    return alert('Preencha login e senha do portal AVA.');
+  }
+
   els.btnLogin.disabled = true;
-  els.btnLogin.innerHTML = '<div class="spinner" style="width:14px;height:14px"></div> Autenticando...';
-  
+  els.btnLogin.innerHTML = '<div class="spinner" style="width:14px;height:14px"></div> Validando Licença...';
+
   try {
-    const res = await fetchPost('/api/login', { login, senha, save });
+    const lic = await window.electronAPI.invoke('auto:validateLicense', licenseKey);
+    if (!lic || !lic.success) {
+      throw new Error(`Acesso Negado: ${lic ? lic.error : 'Erro desconhecido.'}`);
+    }
+    
+    await window.electronAPI.storeSet('licenseKey', licenseKey);
+    document.getElementById('licenseBadge').style.display = 'flex';
+    document.getElementById('licenseText').innerText = `Premium (Até ${lic.expires_at})`;
+    document.getElementById('btnRenovar').style.display = 'block';
+
+    if (groqKey) await window.electronAPI.storeSet('groqKey', groqKey);
+    await window.electronAPI.storeSet('showBrowser', showBrowser);
+    
+    els.btnLogin.innerHTML = '<div class="spinner" style="width:14px;height:14px"></div> Autenticando Motor Nativo...';
+    addLog('🟢 Iniciando injeção em ambiente Desktop isolado...');
+    
+    const res = await fetchPost('/api/login', { login, senha, save, showBrowser });
     if (res.success) {
       els.btnLogout.style.display = 'block';
-      // showStep(2); -> acionado via SSE msg {type: 'status', data: 'logged_in'}
     }
   } catch (err) {
+    addLog(`❌ Falha: ${err.message}`);
     alert(err.message);
   } finally {
     els.btnLogin.disabled = false;
-    els.btnLogin.innerHTML = '<i class="ph-bold ph-rocket-launch"></i> Entrar no Sistema';
+    els.btnLogin.innerHTML = '<i class="ph-bold ph-rocket-launch"></i> Iniciar sistema';
   }
 }
 
 async function logout() {
   try {
     await fetchPost('/api/logout', {});
+    await window.electronAPI.storeSet('credentials', null); 
   } catch {}
   location.reload();
 }

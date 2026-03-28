@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Studio Oryon — Automação Educacional</title>
   <meta name="description" content="Plataforma inteligente de automação educacional — Studio Oryon">
-  <link rel="stylesheet" href="/style.css">
+  <link rel="stylesheet" href="style.css">
   <script src="https://unpkg.com/@phosphor-icons/web"></script>
 </head>
 <body>
@@ -25,6 +25,11 @@
           <span class="status-dot"></span>
           <span id="statusText">Desconectado</span>
         </div>
+        <div class="status-badge" id="licenseBadge" style="display:none; background:rgba(16,185,129,0.1); border-color:rgba(16,185,129,0.3); color:#10b981;">
+          <span class="status-dot" style="background:#10b981; animation: none; box-shadow: 0 0 8px #10b981;"></span>
+          <span id="licenseText">Premium</span>
+        </div>
+        <button class="btn btn-outline btn-sm" id="btnRenovar" style="display:none" onclick="window.electronAPI.send('open-link', 'https://studiooryon.pro/assinatura')"><i class="ph-bold ph-credit-card"></i> Renovar Assinatura</button>
         <button class="btn btn-danger btn-sm" id="btnLogout" style="display:none" onclick="logout()"><i class="ph ph-sign-out"></i> Sair</button>
       </div>
     </header>
@@ -50,14 +55,48 @@
             <label>Senha</label>
             <input type="password" id="inputSenha" placeholder="••••••••" autocomplete="current-password">
           </div>
-          <button class="btn btn-primary" id="btnLogin" onclick="doLogin()"><i class="ph-bold ph-rocket-launch"></i> Entrar no Sistema</button>
+          <div class="input-group" style="grid-column: 1 / -1;">
+            <label style="display: flex; justify-content: space-between; align-items: center;">
+              <span><i class="ph-bold ph-key"></i> Chave API do Groq</span>
+              <a href="#" onclick="document.getElementById('groqTutorial').style.display='flex'; return false;" style="color: var(--accent-light); font-size: 11px; text-decoration: none; cursor: pointer; transition: 0.3s;">[ ❓ Como conseguir minha Chave de IA Grátis? ]</a>
+            </label>
+            <input type="password" id="inputGroqKey" placeholder="gsk_..." autocomplete="off">
+          </div>
+          <div class="input-group" style="grid-column: 1 / -1;">
+            <label style="display: flex; justify-content: space-between;">
+              <span><i class="ph-bold ph-lock-key"></i> Chave de Acesso (Licença) <span style="color:var(--text-secondary); font-size:11px; font-weight:normal; margin-left:8px;">Obrigatório para o uso do sistema</span></span>
+              <a href="#" onclick="window.electronAPI.send('open-link', 'https://mpago.li/2kLegqy'); return false;" style="color: var(--accent-light); font-size: 11px; text-decoration: none; cursor: pointer; transition: 0.3s;">[ 💳 Não possui uma chave? Assinar Agora ]</a>
+            </label>
+            <input type="text" id="inputLicense" placeholder="ORYON-XXXX-XXXX-XXXX" autocomplete="off" style="text-transform: uppercase;">
+          </div>
+          <button class="btn btn-primary" id="btnLogin" onclick="doLogin()" style="grid-column: 1 / -1;"><i class="ph-bold ph-rocket-launch"></i> Iniciar sistema</button>
         </div>
         <div class="checkbox-group">
           <input type="checkbox" id="checkSave" checked>
           <label for="checkSave">Lembrar minhas credenciais localmente</label>
         </div>
+        <div class="checkbox-group" style="margin-top: 5px;">
+          <input type="checkbox" id="checkShowBrowser" checked>
+          <label for="checkShowBrowser">Ver Navegador do Robô (Modo Debug)</label>
+        </div>
       </div>
     </section>
+
+    <!-- Modal Tutorial Groq -->
+    <div id="groqTutorial" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(15,23,42,0.85); backdrop-filter:blur(5px); z-index:1500; align-items:center; justify-content:center;">
+      <div class="card" style="max-width:550px; width:90%; position:relative; margin:0; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);">
+        <div class="card-title" style="color:var(--accent-light)"><i class="ph-fill ph-lightbulb"></i> Chave Grátis: GPT-OSS-120B</div>
+        <p style="font-size:14px; color:var(--text-secondary); margin-bottom:20px;">O modelo de alto desempenho <strong>GPT-OSS-120B</strong> é 100% gratuito. Siga o passo a passo para gerar sua chave de acesso:</p>
+        <ul style="font-size:14px; color:var(--text-primary); margin-left:24px; margin-bottom:28px; line-height:1.8;">
+          <li>Acesse o site oficial: <a href="#" onclick="window.electronAPI.send('open-link', 'https://console.groq.com/keys'); return false;" style="color:var(--accent-light); font-weight:600;">console.groq.com/keys</a></li>
+          <li>Crie sua conta gratuita (você pode usar o botão rápido do Google).</li>
+          <li>Clique no botão principal <strong>"Create API Key"</strong>.</li>
+          <li>Dê um nome (ex: <em>Studio Oryon</em>) e clique em <strong>"Submit"</strong>.</li>
+          <li>Copie o código que começa com <code>gsk_</code> e cole nela.</li>
+        </ul>
+        <button class="btn btn-primary" style="width:100%;" onclick="document.getElementById('groqTutorial').style.display='none'"><i class="ph-bold ph-check"></i> Entendi!</button>
+      </div>
+    </div>
 
     <!-- STEP 2: Disciplinas -->
     <section class="section" id="sectionDisciplinas">
@@ -136,7 +175,7 @@
       <div class="footer-links">
         <a href="https://studiooryon.pro" target="_blank" rel="noopener"><i class="ph-bold ph-globe"></i> Website Oficial</a>
         <a href="https://instagram.com/studiooryon" target="_blank" rel="noopener"><i class="ph-bold ph-instagram-logo"></i> @studiooryon</a>
-        <a href="/privacidade.html"><i class="ph-bold ph-shield-check"></i> Privacidade & LGPD</a>
+        <a href="#" id="link-privacidade"><i class="ph-bold ph-shield-check"></i> Privacidade & LGPD</a>
       </div>
       <div class="footer-copy">
         &copy; 2026 Studio Oryon. Powered By Studio Oryon | studiooryon.pro
@@ -147,11 +186,11 @@
   <!-- Cookie Consent Bar -->
   <div class="cookie-bar" id="cookieBar">
     <div class="cookie-text">
-      <i class="ph-fill ph-cookie"></i> Este sistema opera inteiramente com processamento local e não utiliza cookies de rastreamento. Ao continuar, você aceita nossa <a href="/privacidade.html">Política de Privacidade</a>.
+      <i class="ph-fill ph-cookie"></i> Este sistema opera inteiramente com processamento local e não utiliza cookies de rastreamento. Ao continuar, você aceita nossa <a href="#" onclick="window.electronAPI.send('open-privacy'); return false;">Política de Privacidade</a>.
     </div>
     <button class="btn btn-ghost btn-sm" onclick="acceptCookies()">Reconheço e Aceito</button>
   </div>
 
-  <script src="/app.js"></script>
+  <script src="app.js"></script>
 </body>
 </html>
