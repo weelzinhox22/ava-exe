@@ -71,6 +71,7 @@ function createWindow() {
   });
 
   mainWindow.loadFile(path.join(__dirname, 'public', 'index.html'));
+  mainWindow.maximize();
 
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     shell.openExternal(url);
@@ -193,7 +194,7 @@ ipcMain.handle('store:delete', (event, key) => {
 // Automação API Equivalents
 ipcMain.handle('auto:login', async (event, data) => {
   try {
-    let { login, senha, save, showBrowser } = data;
+    let { login, senha, save, showBrowser, rotateUA, liteMode } = data;
 
     // Load from store if not provided
     if (!senha) {
@@ -216,7 +217,9 @@ ipcMain.handle('auto:login', async (event, data) => {
 
     if (!currentSession) {
       const vBrowser = showBrowser !== undefined ? showBrowser : store.get('showBrowser', true);
-      currentSession = await auto.createSession(emit, vBrowser);
+      const vRotateUA = rotateUA !== undefined ? rotateUA : store.get('rotateUserAgent', false);
+      const vLiteMode = liteMode !== undefined ? liteMode : store.get('liteMode', false);
+      currentSession = await auto.createSession(emit, vBrowser, { rotateUA: vRotateUA, liteMode: vLiteMode });
     }
 
     return await auto.login(currentSession, { login, senha }, emit);
@@ -232,7 +235,185 @@ ipcMain.handle('auto:disciplinas', async () => {
   return { disciplinas: list };
 });
 
-ipcMain.handle('auto:validateLicense', async (event, licenseKey) => {
+// ════════════════════════════════════════════════
+// SUPABASE AUTH — Login, Register, Session
+// ════════════════════════════════════════════════
+
+ipcMain.handle('auth:login', async (event, { email, password }) => {
+  if (!supabase) return { success: false, error: 'Supabase não configurado.' };
+  try {
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) return { success: false, error: error.message };
+    // Persistir sessão para auto-login
+    store.set('supabase_session', data.session);
+    return { success: true, user: { id: data.user.id, email: data.user.email } };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
+ipcMain.handle('auth:register', async (event, { email, password }) => {
+  if (!supabase) return { success: false, error: 'Supabase não configurado.' };
+  try {
+    const { data, error } = await supabase.auth.signUp({ email, password });
+    if (error) return { success: false, error: error.message };
+    // Auto-login após registro (sem confirmação de email)
+    if (data.session) {
+      store.set('supabase_session', data.session);
+    }
+    return { success: true, user: { id: data.user.id, email: data.user.email } };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
+ipcMain.handle('auth:session', async () => {
+  if (!supabase) return { success: false, error: 'Supabase não configurado.' };
+  try {
+    // Tentar restaurar sessão persistida
+    const saved = store.get('supabase_session');
+    if (saved && saved.refresh_token) {
+      const { data, error } = await supabase.auth.setSession({
+        access_token: saved.access_token,
+        refresh_token: saved.refresh_token,
+      });
+      if (!error && data.session) {
+        store.set('supabase_session', data.session);
+        return { success: true, user: { id: data.user.id, email: data.user.email } };
+      }
+    }
+    return { success: false, error: 'Nenhuma sessão salva.' };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
+ipcMain.handle('auth:logout', async () => {
+  if (supabase) await supabase.auth.signOut().catch(() => {});
+  store.delete('supabase_session');
+  return { success: true };
+});
+
+ipcMain.handle('auth:resetPassword', async (event, { email }) => {
+  if (!supabase) return { success: false, error: 'Supabase não configurado.' };
+  try {
+    const { error } = await supabase.auth.resetPasswordForEmail(email);
+    if (error) return { success: false, error: error.message };
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
+// ════════════════════════════════════════════════
+// LICENSE MANAGEMENT — Fetch, Activate
+// ════════════════════════════════════════════════
+
+ipcMain.handle('license:fetch', async (event, { email, userId }) => {
+  if (!supabase) return { success: false, error: 'Supabase não configurado.' };
+  try {
+    // Buscar por user_id primeiro, depois por email
+    let license = null;
+
+    if (userId) {
+      const { data } = await supabase.from('licenses').select('*')
+        .eq('user_id', userId).eq('active', true).order('expires_at', { ascending: false }).limit(1).maybeSingle();
+      license = data;
+    }
+
+    if (!license && email) {
+      const { data } = await supabase.from('licenses').select('*')
+        .eq('owner_email', email).eq('active', true).order('expires_at', { ascending: false }).limit(1).maybeSingle();
+      license = data;
+
+      // Auto-vincular user_id se a licença existe mas ainda não tem user_id
+      if (license && !license.user_id && userId) {
+        await supabase.from('licenses').update({ user_id: userId }).eq('id', license.id);
+        license.user_id = userId;
+      }
+    }
+
+    if (!license) return { success: false, error: 'Nenhuma licença encontrada.' };
+
+    const expiresAt = new Date(license.expires_at);
+    const now = new Date();
+    const expired = expiresAt < now;
+    const diffMs = Math.max(0, expiresAt - now);
+
+    return {
+      success: true,
+      license: {
+        key: license.key,
+        active: license.active && !expired,
+        expired,
+        plan_type: license.plan_type || 'Estudante',
+        ra_limit: license.ra_limit || 1,
+        authorized_ras: license.authorized_ras || [],
+        ra_count: (license.authorized_ras || []).length,
+        expires_at: expiresAt.toISOString(),
+        expires_at_display: expiresAt.toLocaleDateString('pt-BR'),
+        remaining_ms: diffMs,
+        owner_email: license.owner_email,
+      }
+    };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
+ipcMain.handle('license:activate', async (event, { key, email, userId }) => {
+  if (!supabase) return { success: false, error: 'Supabase não configurado.' };
+  try {
+    const { data: license, error } = await supabase.from('licenses').select('*')
+      .eq('key', key.toUpperCase()).single();
+
+    if (error || !license) return { success: false, error: 'Chave de licença inválida.' };
+
+    // Verificar se já pertence a outro usuário
+    if (license.owner_email && license.owner_email !== email && 
+        license.user_id && license.user_id !== userId) {
+      return { success: false, error: 'Esta licença pertence a outro e-mail.' };
+    }
+
+    // Vincular ao usuário
+    const updates = {};
+    if (!license.user_id && userId) updates.user_id = userId;
+    if (!license.owner_email || license.owner_email === 'email.oculto@mercadopago.com') updates.owner_email = email;
+
+    if (Object.keys(updates).length > 0) {
+      await supabase.from('licenses').update(updates).eq('id', license.id);
+    }
+
+    // Salvar key localmente
+    store.set('licenseKey', key.toUpperCase());
+
+    return { success: true, key: license.key };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
+// ── Atualizações e Patch Notes do Launcher ──
+ipcMain.handle('app:getNews', async () => {
+  if (!supabase) return { success: false, error: 'Database disconnected.' };
+  try {
+    const { data, error } = await supabase
+      .from('patch_notes')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(3);
+    if (error) throw error;
+    return { success: true, news: data };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
+ipcMain.handle('auto:validateLicense', async (event, payload) => {
+  // Suporta chamada legada (string) e nova (objeto com ra)
+  const licenseKey = typeof payload === 'string' ? payload : payload.licenseKey;
+  const capturedRA = typeof payload === 'object' ? payload.capturedRA : null;
+
   emitLog('[ORYON] Validando licença nos servidores de nuvem...');
   if (!supabase) {
     emitLog('[ORYON] ERRO: Supabase não configurado (Falta .env).');
@@ -262,6 +443,7 @@ ipcMain.handle('auto:validateLicense', async (event, licenseKey) => {
       return { success: false, error: 'Licença expirada.' };
     }
 
+    // ── Validação de HWID ──
     const currentHWID = machineIdSync();
     if (license.hwid) {
       if (license.hwid !== currentHWID) {
@@ -269,7 +451,6 @@ ipcMain.handle('auto:validateLicense', async (event, licenseKey) => {
         return { success: false, error: 'Hardware ID mismatch.' };
       }
     } else {
-      // Registrar no HWID na primeira vez
       const { error: updateError } = await supabase
         .from('licenses')
         .update({ hwid: currentHWID })
@@ -278,6 +459,40 @@ ipcMain.handle('auto:validateLicense', async (event, licenseKey) => {
       if (updateError) {
          emitLog(`[ORYON] Erro ao vincular HWID: ${updateError.message}`);
          return { success: false, error: 'Falha ao vincular dispositivo.' };
+      }
+      emitLog('[ORYON] HWID vinculado com sucesso neste dispositivo.');
+    }
+
+    // ── Validação de RA (Multi-RA com limite) ──
+    if (capturedRA) {
+      const authorizedRAs = license.authorized_ras || [];
+      const raLimit = license.ra_limit || 1;
+
+      if (authorizedRAs.includes(capturedRA)) {
+        // RA já autorizado — acesso liberado
+        emitLog(`[ORYON] ✅ RA validado: ${capturedRA} (${authorizedRAs.length}/${raLimit} slots ocupados)`);
+      } else if (authorizedRAs.length < raLimit) {
+        // Há slots disponíveis — registrar novo RA
+        const newRAs = [...authorizedRAs, capturedRA];
+        const { error: raError } = await supabase
+          .from('licenses')
+          .update({ authorized_ras: newRAs })
+          .eq('key', licenseKey);
+
+        if (raError) {
+          emitLog(`[ORYON] Erro ao vincular RA: ${raError.message}`);
+          return { success: false, error: 'Falha ao vincular RA à licença.' };
+        }
+        emitLog(`[ORYON] ✅ Novo RA autorizado: ${capturedRA} (${newRAs.length}/${raLimit} slots ocupados)`);
+      } else {
+        // Limite atingido — bloquear
+        emitLog(`[ORYON] 🛑 LIMITE DE RAs ATINGIDO: ${authorizedRAs.length}/${raLimit}. RA ${capturedRA} recusado.`);
+        return { 
+          success: false, 
+          error: 'RA_LIMIT_REACHED', 
+          currentCount: authorizedRAs.length, 
+          maxCount: raLimit 
+        };
       }
     }
 
@@ -292,6 +507,11 @@ ipcMain.handle('auto:validateLicense', async (event, licenseKey) => {
     emitLog(`[ORYON] Erro de rede validando licença: ${err.message}`);
     return { success: false, error: 'Falha na conexão com a nuvem ORYON.' };
   }
+});
+
+ipcMain.handle('auto:captureRA', async () => {
+  if (!currentSession) throw new Error('Faça login primeiro.');
+  return await auto.captureRA(currentSession, emit);
 });
 
 ipcMain.handle('auto:disciplina', async (event, data) => {

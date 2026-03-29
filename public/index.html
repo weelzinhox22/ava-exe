@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -8,204 +9,511 @@
   <link rel="stylesheet" href="style.css">
   <script src="https://unpkg.com/@phosphor-icons/web"></script>
 </head>
+
 <body>
-  <div class="app">
 
-    <!-- Barra de Atualização (oculta por padrão, controlada pelo app.js) -->
-    <div id="updateBar" style="
-      display: none;
-      align-items: center; justify-content: space-between;
-      background: linear-gradient(135deg, rgba(99,102,241,0.18), rgba(59,130,246,0.12));
-      border: 1px solid rgba(99,102,241,0.4);
-      border-radius: 12px; padding: 14px 22px; margin-bottom: 18px;
-      gap: 16px; flex-wrap: wrap;
-      animation: fadeIn 0.4s ease;
-    ">
-      <div style="display:flex; align-items:center; gap:12px; flex:1;">
-        <i class="ph-fill ph-arrow-circle-up" style="font-size:22px; color:#818cf8;"></i>
-        <div>
-          <div id="updateBarTitle" style="font-weight:700; font-size:14px; color:#e0e7ff;">Nova versão disponível!</div>
-          <div id="updateBarSub" style="font-size:12px; color:#94a3b8; margin-top:2px;">Clique em Atualizar para baixar em segundo plano.</div>
-        </div>
+  <!-- ══════════════════════════════════════════ -->
+  <!-- VIEW 1: AUTH (Login / Register)           -->
+  <!-- ══════════════════════════════════════════ -->
+  <div id="viewAuth" class="view view-auth">
+    <!-- Esquerda: Central de Notícias -->
+    <div class="auth-left">
+      <div class="auth-left-header">
+        <h2 class="auth-news-title"><i class="ph-bold ph-megaphone"></i> O que há de novo</h2>
+        <span class="auth-news-subtitle">Central de Atualizações</span>
       </div>
-      <div style="display:flex; align-items:center; gap:10px; flex-shrink:0;">
-        <div id="updateProgress" style="display:none; font-size:12px; color:#94a3b8; min-width:120px; text-align:right;">
-          <div id="updateProgressText">Baixando...</div>
-          <div style="background:rgba(255,255,255,0.1); border-radius:4px; height:4px; margin-top:4px; overflow:hidden;">
-            <div id="updateProgressBar" style="height:100%; background:linear-gradient(90deg,#6366f1,#3b82f6); width:0%; transition:width 0.3s ease; border-radius:4px;"></div>
-          </div>
-        </div>
-        <button id="btnUpdate" onclick="handleUpdate()" style="
-          display:inline-flex; align-items:center; gap:7px;
-          padding:9px 18px; border-radius:9px; font-size:13px; font-weight:700;
-          background:linear-gradient(135deg,#6366f1,#3b82f6); color:#fff;
-          border:none; cursor:pointer; white-space:nowrap;
-          box-shadow:0 0 15px rgba(99,102,241,0.4); transition:all 0.2s;
-        "
-        onmouseover="this.style.transform='translateY(-1px)'; this.style.boxShadow='0 0 25px rgba(99,102,241,0.6)'"
-        onmouseout="this.style.transform=''; this.style.boxShadow='0 0 15px rgba(99,102,241,0.4)'"
-        >
-          <i class="ph-bold ph-download-simple"></i>
-          <span id="btnUpdateLabel">Atualizar Agora</span>
-        </button>
-        <button onclick="document.getElementById('updateBar').style.display='none'" style="
-          background:none; border:none; color:#64748b; cursor:pointer; font-size:18px; padding:4px; line-height:1;
-        " title="Dispensar">✕</button>
+      <div id="authNewsContainer" class="auth-news-container">
+        <!-- Renderizado dinamicamente -->
       </div>
     </div>
 
-    <!-- Header -->
-    <header class="header">
-      <div class="header-left">
-        <div class="header-logo"><i class="ph-fill ph-lightning"></i></div>
-        <div>
-          <div class="header-title">Studio Oryon</div>
-          <div class="header-sub">Automação Educacional Inteligente</div>
-        </div>
-      </div>
-      <div class="header-right">
-        <div class="status-badge" id="statusBadge">
-          <span class="status-dot"></span>
-          <span id="statusText">Desconectado</span>
-        </div>
-        <div class="status-badge" id="licenseBadge" style="display:none; background:rgba(16,185,129,0.1); border-color:rgba(16,185,129,0.3); color:#10b981;">
-          <span class="status-dot" style="background:#10b981; animation: none; box-shadow: 0 0 8px #10b981;"></span>
-          <span id="licenseText">Premium</span>
-        </div>
-        <button class="btn btn-outline btn-sm" id="btnRenovar" style="display:none" onclick="window.electronAPI.send('open-link', 'https://mpago.li/2kLegqy')"><i class="ph-bold ph-credit-card"></i> Renovar Assinatura</button>
-        <button class="btn btn-danger btn-sm" id="btnLogout" style="display:none" onclick="logout()"><i class="ph ph-sign-out"></i> Sair</button>
-      </div>
-    </header>
+    <!-- Direita: Painel de Login -->
+    <div class="auth-right">
+      <div class="auth-right-content">
 
-    <!-- Steps -->
-    <div class="steps" id="stepsBar">
-      <div class="step active" data-step="1"><span class="step-num">1</span> Login</div>
-      <div class="step" data-step="2"><span class="step-num">2</span> Disciplinas</div>
-      <div class="step" data-step="3"><span class="step-num">3</span> Conteúdo</div>
-      <div class="step" data-step="4"><span class="step-num">4</span> Automação</div>
-    </div>
+        <!-- Mascote SVG Animado -->
+        <div class="auth-mascot" id="authMascot">
+          <svg width="120" height="120" viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <!-- Glow background -->
+            <circle cx="60" cy="60" r="45" fill="rgba(59, 130, 246, 0.08)" class="mascot-bg-glow" />
 
-    <!-- STEP 1: Login -->
-    <section class="section visible" id="sectionLogin">
-      <div class="card">
-        <div class="card-title"><i class="ph-fill ph-lock-key"></i> Autenticação</div>
-        <div class="login-grid">
+            <!-- Head Base -->
+            <rect x="25" y="30" width="70" height="60" rx="16" fill="#1E293B" stroke="#3B82F6" stroke-width="3" />
+
+            <!-- Ears -->
+            <path d="M25 50 h -8 v 20 h 8" fill="#3B82F6" />
+            <path d="M95 50 h 8 v 20 h -8" fill="#3B82F6" />
+
+            <!-- Antenna -->
+            <line x1="60" y1="30" x2="60" y2="12" stroke="#3B82F6" stroke-width="3" />
+            <circle cx="60" cy="10" r="4" fill="#60A5FA" class="mascot-antenna-glow" />
+
+            <!-- Goggles / Visor -->
+            <rect x="35" y="45" width="50" height="24" rx="10" fill="#0F172A" stroke="#475569" stroke-width="2" />
+
+            <!-- Moving Eyes Group -->
+            <g id="mascotEyes" transform="translate(0,0)" style="transition: transform 0.1s ease-out">
+              <circle id="eyeL" cx="48" cy="57" r="5" fill="#60A5FA" style="transition: all 0.2s" />
+              <circle id="eyeR" cx="72" cy="57" r="5" fill="#60A5FA" style="transition: all 0.2s" />
+            </g>
+
+            <!-- Hands (Privacy Mode) -->
+            <g id="mascotHands" transform="translate(0, 30)"
+              style="transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); opacity: 0;">
+              <rect x="30" y="44" width="28" height="18" rx="8" fill="#3B82F6" />
+              <rect x="62" y="44" width="28" height="18" rx="8" fill="#3B82F6" />
+            </g>
+          </svg>
+        </div>
+
+        <div class="auth-card">
+          <div class="auth-card-title" id="authTitle">Acesse sua conta</div>
+
           <div class="input-group">
-            <label>Login (RA / Email)</label>
-            <input type="text" id="inputLogin" placeholder="Digite seu RA ou email" autocomplete="username">
+            <label>E-mail</label>
+            <input type="email" id="authEmail" placeholder="seu@email.com" autocomplete="email">
           </div>
-          <div class="input-group">
+          <div class="input-group" style="margin-top:14px">
             <label>Senha</label>
-            <input type="password" id="inputSenha" placeholder="••••••••" autocomplete="current-password">
+            <input type="password" id="authPassword" placeholder="••••••••" autocomplete="current-password">
           </div>
-          <div class="input-group" style="grid-column: 1 / -1;">
-            <label style="display: flex; justify-content: space-between; align-items: center;">
-              <span><i class="ph-bold ph-key"></i> Chave API do Groq</span>
-              <a href="#" onclick="document.getElementById('groqTutorial').style.display='flex'; return false;" style="color: var(--accent-light); font-size: 11px; text-decoration: none; cursor: pointer; transition: 0.3s;">[ ❓ Como conseguir minha Chave de IA Grátis? ]</a>
-            </label>
-            <input type="password" id="inputGroqKey" placeholder="gsk_..." autocomplete="off">
-          </div>
-          <div class="input-group" style="grid-column: 1 / -1;">
-            <label style="display: flex; justify-content: space-between;">
-              <span><i class="ph-bold ph-lock-key"></i> Chave de Acesso (Licença) <span style="color:var(--text-secondary); font-size:11px; font-weight:normal; margin-left:8px;">Obrigatório para o uso do sistema</span></span>
-              <a href="#" onclick="window.electronAPI.send('open-link', 'https://mpago.li/2kLegqy'); return false;" style="color: var(--accent-light); font-size: 11px; text-decoration: none; cursor: pointer; transition: 0.3s;">[ 💳 Não possui uma chave? Assinar Agora ]</a>
-            </label>
-            <input type="text" id="inputLicense" placeholder="ORYON-XXXX-XXXX-XXXX" autocomplete="off" style="text-transform: uppercase;">
-          </div>
-          <button class="btn btn-primary" id="btnLogin" onclick="doLogin()" style="grid-column: 1 / -1;"><i class="ph-bold ph-rocket-launch"></i> Iniciar sistema</button>
-        </div>
-        <div class="checkbox-group">
-          <input type="checkbox" id="checkSave" checked>
-          <label for="checkSave">Lembrar minhas credenciais localmente</label>
-        </div>
-        <div class="checkbox-group" style="margin-top: 5px;">
-          <input type="checkbox" id="checkShowBrowser" checked>
-          <label for="checkShowBrowser">Ver Navegador do Robô (Modo Debug)</label>
-        </div>
-      </div>
-    </section>
 
-    <!-- Modal Tutorial Groq -->
-    <div id="groqTutorial" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(15,23,42,0.85); backdrop-filter:blur(5px); z-index:1500; align-items:center; justify-content:center;">
-      <div class="card" style="max-width:550px; width:90%; position:relative; margin:0; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);">
-        <div class="card-title" style="color:var(--accent-light)"><i class="ph-fill ph-lightbulb"></i> Chave Grátis: GPT-OSS-120B</div>
-        <p style="font-size:14px; color:var(--text-secondary); margin-bottom:20px;">O modelo de alto desempenho <strong>GPT-OSS-120B</strong> é 100% gratuito. Siga o passo a passo para gerar sua chave de acesso:</p>
-        <ul style="font-size:14px; color:var(--text-primary); margin-left:24px; margin-bottom:28px; line-height:1.8;">
-          <li>Acesse o site oficial: <a href="#" onclick="window.electronAPI.send('open-link', 'https://console.groq.com/keys'); return false;" style="color:var(--accent-light); font-weight:600;">console.groq.com/keys</a></li>
-          <li>Crie sua conta gratuita (você pode usar o botão rápido do Google).</li>
-          <li>Clique no botão principal <strong>"Create API Key"</strong>.</li>
-          <li>Dê um nome (ex: <em>Studio Oryon</em>) e clique em <strong>"Submit"</strong>.</li>
-          <li>Copie o código que começa com <code>gsk_</code> e cole nela.</li>
-        </ul>
-        <button class="btn btn-primary" style="width:100%;" onclick="document.getElementById('groqTutorial').style.display='none'"><i class="ph-bold ph-check"></i> Entendi!</button>
+          <button class="btn btn-primary auth-btn" id="btnAuth" onclick="doAuth()" style="margin-top:20px;">
+            <i class="ph-bold ph-sign-in"></i> Conectar
+          </button>
+
+          <div class="auth-toggle">
+            <span id="authToggleText">Ainda não tem licença?</span>
+            <a href="#" id="authToggleLink" onclick="toggleAuthMode(); return false;">Criar nova conta</a>
+          </div>
+          <div class="auth-forgot">
+            <a href="#" onclick="doResetPassword(); return false;"><i class="ph ph-key"></i> Esqueci minha senha</a>
+          </div>
+          <div class="auth-error" id="authError" style="display:none"></div>
+        </div>
+
+        <div class="auth-logo">
+          <div class="auth-logo-icon"><i class="ph-fill ph-lightning"></i></div>
+          <div class="auth-logo-text">Studio Oryon</div>
+          <div class="auth-logo-sub">Automação Educacional Inteligente</div>
+        </div>
+
       </div>
     </div>
+  </div>
 
-    <!-- STEP 2: Disciplinas -->
-    <section class="section" id="sectionDisciplinas">
-      <div class="card">
-        <div class="card-title"><i class="ph-fill ph-books"></i> Selecione a Disciplina</div>
-        <div id="disciplinasList" class="item-grid"></div>
-        <div class="loading" id="loadingDisciplinas" style="display:none">
-          <div class="spinner"></div> Carregando disciplinas do AVA...
+  <!-- ══════════════════════════════════════════ -->
+  <!-- VIEW 2: DASHBOARD                         -->
+  <!-- ══════════════════════════════════════════ -->
+  <div id="viewDashboard" class="view dash-view" style="display:none">
+    <div class="dash-layout">
+      <!-- Sidebar Esquerda -->
+      <aside class="dash-sidebar">
+        <div class="dash-sidebar-top">
+          <div class="dash-logo">
+            <div class="dash-logo-icon"><i class="ph-fill ph-lightning"></i></div>
+            <div class="dash-logo-text">Studio Oryon</div>
+          </div>
+          <nav class="dash-nav">
+            <a href="#" id="navVisaoGeral" class="dash-nav-item active" onclick="switchDashTab('Overview'); return false;"><i class="ph-fill ph-squares-four"></i> Visão Geral</a>
+            <a href="#" id="navNovidades" class="dash-nav-item" onclick="switchDashTab('News'); return false;"><i class="ph ph-newspaper"></i> Novidades</a>
+            <a href="#" class="dash-nav-item" onclick="document.getElementById('updateBar').style.display='flex'; return false;"><i class="ph ph-arrows-clockwise"></i> Buscar Atualizações</a>
+            <a href="#" class="dash-nav-item disabled" title="Em breve: Histórico de automações e logs"><i class="ph ph-file-text"></i> Histórico</a>
+            <a href="#" id="navAjustes" class="dash-nav-item" onclick="switchDashTab('Settings'); return false;"><i class="ph ph-gear-six"></i> Ajustes</a>
+          </nav>
         </div>
-      </div>
-    </section>
+        <div class="dash-sidebar-bottom">
+          <button class="btn dash-btn-outline" onclick="doAuthLogout()"><i class="ph ph-sign-out"></i> Encerrar
+            Sessão</button>
+        </div>
+      </aside>
 
-    <!-- STEP 3: Unidades / Seções / Atividades -->
-    <section class="section" id="sectionNav">
-      <div class="card" id="cardUnidades">
-        <div class="card-title"><i class="ph-fill ph-book-open"></i> Estrutura da Unidade</div>
-        <div id="unidadesList" class="item-grid"></div>
-        <div class="loading" id="loadingUnidades" style="display:none">
-          <div class="spinner"></div> Sincronizando unidades...
+      <!-- Área Principal (Scrollável) -->
+      <main class="dash-main">
+        <!-- Barra de Atualização (Mantida lógica visual e botões) -->
+        <div id="updateBar"
+          style="display: none; align-items: center; justify-content: space-between; background: linear-gradient(135deg, rgba(99,102,241,0.18), rgba(59,130,246,0.12)); border: 1px solid rgba(99,102,241,0.4); border-radius: 16px; padding: 16px 24px; margin-bottom: 24px; animation: fadeIn 0.4s ease;">
+          <div style="display:flex; align-items:center; gap:16px;">
+            <i class="ph-fill ph-arrow-circle-up" style="font-size:26px; color:#818cf8;"></i>
+            <div>
+              <div id="updateBarTitle" style="font-weight:700; font-size:16px; color:#e0e7ff;">Nova versão disponível!
+              </div>
+              <div id="updateBarSub" style="font-size:13px; color:#94a3b8; margin-top:2px;">Atualize seu sistema Oryon
+                para garantir a estabilidade das automações.</div>
+            </div>
+          </div>
+          <div style="display:flex; align-items:center; gap:12px;">
+            <div id="updateProgress"
+              style="display:none; font-size:12px; color:#94a3b8; min-width:120px; text-align:right;">
+              <div id="updateProgressText">Baixando...</div>
+              <div
+                style="background:rgba(255,255,255,0.1); border-radius:4px; height:4px; margin-top:6px; overflow:hidden;">
+                <div id="updateProgressBar"
+                  style="height:100%; background:linear-gradient(90deg,#6366f1,#3b82f6); width:0%; transition:width 0.3s ease; border-radius:4px;">
+                </div>
+              </div>
+            </div>
+            <button id="btnUpdate" onclick="handleUpdate()" class="btn btn-primary"><i
+                class="ph-bold ph-download-simple"></i> <span id="btnUpdateLabel">Atualizar Agora</span></button>
+            <button onclick="document.getElementById('updateBar').style.display='none'"
+              style="background:none; border:none; color:#64748b; cursor:pointer; font-size:20px;">✕</button>
+          </div>
         </div>
-      </div>
-      <div class="card" id="cardSeccoes" style="display:none">
-        <div class="card-title"><i class="ph-fill ph-file-text"></i> Selecione a Seção</div>
-        <div id="seccoesList" class="item-grid"></div>
-      </div>
-      <div class="card" id="cardAtividades" style="display:none">
-        <div class="card-title"><i class="ph-fill ph-target"></i> Escopo da Atividade</div>
-        <div id="atividadesList" class="item-grid"></div>
-      </div>
-      <div style="text-align: right; margin-top: 16px;">
-        <button class="btn btn-success" id="btnResolver" onclick="startResolver()" style="display:none">
-          <i class="ph-bold ph-robot"></i> Iniciar Motor de Automação
-        </button>
-      </div>
-    </section>
 
-    <!-- STEP 4: Resolução / Resultado -->
-    <section class="section" id="sectionResult">
-      <div class="score-card" id="scoreCard">
-        <div class="score-icon"><i class="ph-fill ph-trophy"></i></div>
-        <div class="score-value" id="scoreValue">—</div>
-        <div class="score-label" id="scoreLabel">Aproveitamento Analítico</div>
-        <div class="post-quiz-menu" id="postQuizMenu">
-          <button class="btn btn-primary" onclick="refazerQuestionario()"><i class="ph-bold ph-arrows-clockwise"></i> Refazer Questionário</button>
-          <button class="btn btn-ghost" onclick="voltarDisciplinas()"><i class="ph-bold ph-books"></i> Voltar às Disciplinas</button>
-          <button class="btn btn-danger" onclick="sairFechar()"><i class="ph-bold ph-sign-out"></i> Encerrar Sessão</button>
-        </div>
-      </div>
-    </section>
+        <header class="dash-header">
+          <div>
+            <h1 class="dash-title">Olá, <span id="dashUserEmail" style="color:#60A5FA;">usuario@email.com</span></h1>
+            <p class="dash-subtitle">Aqui estão suas estatísticas, uso de RAs e gerador do robô.</p>
+          </div>
+          <div class="dash-plan-badge-wrapper">
+            <span class="dash-plan-label">PLANO ATIVO</span>
+            <div class="dash-plan-badge" id="dashPlanBadge">Estudante</div>
+          </div>
+        </header>
 
-    <!-- Console de Logs (sempre visível) -->
-    <div class="card console-card" style="margin-top: 24px;">
-      <div class="card-title" style="justify-content: space-between; margin-bottom: 12px;">
-        <div style="display:flex; align-items:center; gap:10px;">
-          <i class="ph-fill ph-terminal-window"></i> Terminal de Eventos
+        <!-- ╔══════════════════════════════════════════╗ -->
+        <!-- ║ SECTION 1: VISÃO GERAL (OVERVIEW)        ║ -->
+        <!-- ╚══════════════════════════════════════════╝ -->
+        <div id="dashSectionOverview" class="dash-section active">
+          <!-- Bento Grid Principal -->
+          <div class="bento-grid">
+
+          <!-- Box 1: Progresso Circular RAs (Especial) -->
+          <div class="bento-card bento-ra">
+            <div class="bento-card-header">
+              <i class="ph-fill ph-users-three"></i> RAs na Nuvem
+            </div>
+            <div class="circular-wrapper">
+              <svg viewBox="0 0 36 36" class="circular-chart">
+                <!-- Fundo -->
+                <path class="circle-bg" d="M18 2.0845
+                    a 15.9155 15.9155 0 0 1 0 31.831
+                    a 15.9155 15.9155 0 0 1 0 -31.831" />
+                <!-- Preenchimento (animado via stroke-dashoffset de 100 até 0) -->
+                <path class="circle" id="dashRACircle" stroke-dasharray="100, 100" stroke-dashoffset="100" d="M18 2.0845
+                    a 15.9155 15.9155 0 0 1 0 31.831
+                    a 15.9155 15.9155 0 0 1 0 -31.831" />
+              </svg>
+              <!-- Info no centro do anel -->
+              <div class="circular-info">
+                <div class="circ-val"><span id="dashRACount">0</span>/<span id="dashRALimit">1</span></div>
+                <div class="circ-lbl">Em uso</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Box 2: Timer Digital -->
+          <div class="bento-card bento-timer">
+            <div class="bento-card-header">
+              <i class="ph-fill ph-timer"></i> Validade da Chave
+            </div>
+            <div class="dash-countdown-neo" id="dashCountdown">
+              <div class="neo-block"><span id="cdDays">00</span><small>Dias</small></div>
+              <div class="neo-sep">:</div>
+              <div class="neo-block"><span id="cdHours">00</span><small>Horas</small></div>
+              <div class="neo-sep">:</div>
+              <div class="neo-block"><span id="cdMins">00</span><small>Min</small></div>
+              <div class="neo-sep">:</div>
+              <div class="neo-block"><span id="cdSecs">00</span><small>Seg</small></div>
+            </div>
+            <div class="dash-expires-date" id="dashExpiresDate">—</div>
+          </div>
+
+          <!-- Espaço Removido (Movido para Ajustes) -->
+
+          <!-- Box 4: Ativação Nova Key -->
+          <div class="bento-card bento-activate">
+            <div class="bento-card-header">
+              <i class="ph-fill ph-key"></i> Ativação e Renovações
+            </div>
+            <p class="bento-desc">Insira um Voucher (Key) para atualizar seu plano ou expandir RAs.</p>
+            <div class="activate-row">
+              <input type="text" id="inputActivateKey" placeholder="ORYON-XXXX-XXXX" autocomplete="off"
+                class="bento-input">
+              <button class="btn btn-primary" id="btnActivateKey" onclick="activateKey()">
+                <i class="ph-bold ph-check-circle"></i> Validar
+              </button>
+            </div>
+            <div class="auth-error" id="activateError" style="display:none; margin-top:10px;"></div>
+            <a href="#"
+              onclick="window.electronAPI.send('open-link', 'https://studiooryon.pro/ava-oryon'); return false;"
+              class="buy-link">
+              🛒 Adquirir Plano Trimestral
+            </a>
+          </div>
         </div>
-        <button class="btn btn-ghost btn-sm" onclick="clearLogs()"><i class="ph ph-trash"></i> Limpar</button>
-      </div>
-      <div class="console" id="logConsole">
-        <div class="log-line">
-          <span class="log-time">--:--:--</span>
-          <span class="log-msg">Aguardando bootstrap do sistema...</span>
+
+        <!-- Área Final de Ação -->
+        <div class="bento-hero-action">
+          <button class="btn-hero-launch" id="btnLaunchSystem" onclick="launchSystem()" disabled>
+            INICIAR SISTEMA ORYON
+          </button>
         </div>
-      </div>
+
+        <!-- Alerta de bloqueio caso não tenha key -->
+        <div id="dashNoLicense" class="dash-no-license" style="display:none;">
+          <i class="ph-fill ph-warning-circle"></i>
+          <div>
+            Nenhuma licença ativa encontrada. Insira sua chave acima ou <a href="#"
+              onclick="window.electronAPI.send('open-link', 'https://studiooryon.pro/ava-oryon'); return false;">adquira
+              agora</a>.
+          </div>
+        </div>
+
+        </div> <!-- FIM SECTION OVERVIEW -->
+
+        <!-- ╔══════════════════════════════════════════╗ -->
+        <!-- ║ SECTION 2: NOVIDADES (NEWS)              ║ -->
+        <!-- ╚══════════════════════════════════════════╝ -->
+        <div id="dashSectionNews" class="dash-section" style="display:none;">
+          <h2 class="dash-title" style="font-size: 24px; margin-bottom: 24px;"><i class="ph-fill ph-newspaper" style="color:#60A5FA;"></i> Central de Atualizações</h2>
+          <div id="dashNewsList" style="display:flex; flex-direction:column; gap:16px;">
+            <div class="loading" style="display:block;"><div class="spinner"></div> Carregando patch notes...</div>
+          </div>
+        </div>
+
+        <!-- ╔══════════════════════════════════════════╗ -->
+        <!-- ║ SECTION 3: AJUSTES (SETTINGS)            ║ -->
+        <!-- ╚══════════════════════════════════════════╝ -->
+        <div id="dashSectionSettings" class="dash-section" style="display:none;">
+          <h2 class="dash-title" style="font-size: 24px; margin-bottom: 24px;"><i class="ph-fill ph-gear-six" style="color:#60A5FA;"></i> Configurações do Motor e Sistema</h2>
+          
+          <div class="bento-grid">
+            <!-- ENGINE SETTINGS -->
+            <div class="bento-card" style="grid-column: span 3;">
+              <div class="bento-card-header">
+                <i class="ph-fill ph-cpu"></i> IA & Comportamento do Navegador
+              </div>
+              <div class="settings-content" style="display:grid; grid-template-columns:1fr 1fr; gap:24px;">
+                <!-- Groq Config -->
+                <div class="input-group">
+                  <label style="display:flex; justify-content:space-between; align-items:center;">
+                    <span><i class="ph-bold ph-key"></i> Chave API do Groq</span>
+                    <a href="#" onclick="document.getElementById('groqTutorial').style.display='flex'; return false;" class="help-link">[ Ajuda ]</a>
+                  </label>
+                  <input type="password" id="inputGroqKey" class="bento-input" placeholder="Obrigatório: gsk_..." autocomplete="off">
+                  <span style="font-size:11px; color:var(--text-muted); margin-top:6px;">Chave que possibilita o robô raciocinar respostas no AVA.</span>
+                </div>
+                
+                <!-- Toggles Internos -->
+                <div style="display:flex; flex-direction:column; gap:16px;">
+                  <div class="checkbox-group" style="margin-top:0;">
+                    <input type="checkbox" id="checkShowBrowser" checked>
+                    <label for="checkShowBrowser" style="font-size:14px; font-weight:600; color:#fff;">Modo Visual (Exibir Motor rodando)</label>
+                  </div>
+                  
+                  <div class="checkbox-group" style="margin-top:0;">
+                    <input type="checkbox" id="checkRotateUserAgent" checked>
+                    <label for="checkRotateUserAgent" style="font-size:14px; font-weight:600; color:#fff;">Rotacionar User-Agent (Oculta Pistas Locais)</label>
+                  </div>
+
+                  <div class="checkbox-group" style="margin-top:0;">
+                    <input type="checkbox" id="checkLiteMode" checked>
+                    <label for="checkLiteMode" style="font-size:14px; font-weight:600; color:#fff;">Playwright Ultra-Lite (Ignora Mídias / Alto Desempenho)</label>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </main>
     </div>
+  </div>
 
+  <!-- ══════════════════════════════════════════ -->
+  <!-- VIEW 3: AUTOMATION (Fluxo AVA existente)  -->
+  <!-- ══════════════════════════════════════════ -->
+  <div id="viewAutomation" class="view" style="display:none">
+    <div class="app">
+      <!-- Header Automação -->
+      <header class="header">
+        <div class="header-left">
+          <button class="btn btn-ghost btn-sm" onclick="backToDashboard()" style="margin-right:12px;">
+            <i class="ph-bold ph-arrow-left"></i> Dashboard
+          </button>
+          <div class="header-logo"><i class="ph-fill ph-lightning"></i></div>
+          <div>
+            <div class="header-title">Studio Oryon</div>
+            <div class="header-sub">Motor de Automação</div>
+          </div>
+        </div>
+        <div class="header-right">
+          <div class="status-badge" id="statusBadge">
+            <span class="status-dot"></span>
+            <span id="statusText">Desconectado</span>
+          </div>
+          <div class="status-badge" id="licenseBadge"
+            style="display:none; background:rgba(16,185,129,0.1); border-color:rgba(16,185,129,0.3); color:#10b981;">
+            <span class="status-dot" style="background:#10b981; animation: none; box-shadow: 0 0 8px #10b981;"></span>
+            <span id="licenseText">Premium</span>
+          </div>
+          <button class="btn btn-danger btn-sm" id="btnLogout" style="display:none" onclick="logout()"><i
+              class="ph ph-sign-out"></i> Fechar Robô</button>
+        </div>
+      </header>
+
+      <!-- Steps -->
+      <div class="steps" id="stepsBar">
+        <div class="step active" data-step="1"><span class="step-num">1</span> Login AVA</div>
+        <div class="step" data-step="2"><span class="step-num">2</span> Disciplinas</div>
+        <div class="step" data-step="3"><span class="step-num">3</span> Conteúdo</div>
+        <div class="step" data-step="4"><span class="step-num">4</span> Automação</div>
+      </div>
+
+      <!-- STEP 1: Login do AVA -->
+      <section class="section visible" id="sectionLogin">
+        <div class="card">
+          <div class="card-title"><i class="ph-fill ph-graduation-cap"></i> Credenciais do Portal AVA</div>
+          <div class="login-grid">
+            <div class="input-group">
+              <label>Login (RA / Email)</label>
+              <input type="text" id="inputLogin" placeholder="Digite seu RA ou email" autocomplete="username">
+            </div>
+            <div class="input-group">
+              <label>Senha</label>
+              <input type="password" id="inputSenha" placeholder="••••••••" autocomplete="current-password">
+            </div>
+            <button class="btn btn-primary" id="btnLogin" onclick="doLogin()" style="grid-column: 1 / -1;"><i
+                class="ph-bold ph-play-circle"></i> Conectar ao AVA</button>
+          </div>
+          <div class="checkbox-group">
+            <input type="checkbox" id="checkSave" checked>
+            <label for="checkSave">Lembrar credenciais do AVA localmente</label>
+          </div>
+        </div>
+      </section>
+
+      <!-- STEP 2: Disciplinas -->
+      <section class="section" id="sectionDisciplinas">
+        <div class="card">
+          <div class="card-title"><i class="ph-fill ph-books"></i> Selecione a Disciplina</div>
+          <div id="disciplinasList" class="item-grid"></div>
+          <div class="loading" id="loadingDisciplinas" style="display:none">
+            <div class="spinner"></div> Carregando disciplinas do AVA...
+          </div>
+        </div>
+      </section>
+
+      <!-- STEP 3: Unidades / Seções / Atividades -->
+      <section class="section" id="sectionNav">
+        <div class="card" id="cardUnidades">
+          <div class="card-title"><i class="ph-fill ph-book-open"></i> Estrutura da Unidade</div>
+          <div id="unidadesList" class="item-grid"></div>
+          <div class="loading" id="loadingUnidades" style="display:none">
+            <div class="spinner"></div> Sincronizando unidades...
+          </div>
+        </div>
+        <div class="card" id="cardSeccoes" style="display:none">
+          <div class="card-title"><i class="ph-fill ph-file-text"></i> Selecione a Seção</div>
+          <div id="seccoesList" class="item-grid"></div>
+        </div>
+        <div class="card" id="cardAtividades" style="display:none">
+          <div class="card-title"><i class="ph-fill ph-target"></i> Escopo da Atividade</div>
+          <div id="atividadesList" class="item-grid"></div>
+        </div>
+        <div style="text-align: right; margin-top: 16px;">
+          <button class="btn btn-success" id="btnResolver" onclick="startResolver()" style="display:none">
+            <i class="ph-bold ph-robot"></i> Iniciar Motor de Automação
+          </button>
+        </div>
+      </section>
+
+      <!-- STEP 4: Resultado -->
+      <section class="section" id="sectionResult">
+        <div class="score-card" id="scoreCard">
+          <div class="score-icon"><i class="ph-fill ph-trophy"></i></div>
+          <div class="score-value" id="scoreValue">—</div>
+          <div class="score-label" id="scoreLabel">Aproveitamento Analítico</div>
+          <div class="post-quiz-menu" id="postQuizMenu">
+            <button class="btn btn-primary" onclick="refazerQuestionario()"><i class="ph-bold ph-arrows-clockwise"></i>
+              Refazer Questionário</button>
+            <button class="btn btn-ghost" onclick="voltarDisciplinas()"><i class="ph-bold ph-books"></i> Voltar às
+              Disciplinas</button>
+            <button class="btn btn-danger" onclick="sairFechar()"><i class="ph-bold ph-sign-out"></i> Encerrar
+              Sessão</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Console de Logs -->
+      <div class="card console-card" style="margin-top: 24px;">
+        <div class="card-title" style="justify-content: space-between; margin-bottom: 12px;">
+          <div style="display:flex; align-items:center; gap:10px;">
+            <i class="ph-fill ph-terminal-window"></i> Terminal de Eventos
+          </div>
+          <button class="btn btn-ghost btn-sm" onclick="clearLogs()"><i class="ph ph-trash"></i> Limpar</button>
+        </div>
+        <div class="console" id="logConsole">
+          <div class="log-line">
+            <span class="log-time">--:--:--</span>
+            <span class="log-msg">Aguardando bootstrap do sistema...</span>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════ -->
+  <!-- MODALS                                     -->
+  <!-- ══════════════════════════════════════════ -->
+
+  <!-- Modal Tutorial Groq -->
+  <div id="groqTutorial"
+    style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(15,23,42,0.85); backdrop-filter:blur(5px); z-index:1500; align-items:center; justify-content:center;">
+    <div class="card"
+      style="max-width:550px; width:90%; position:relative; margin:0; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);">
+      <div class="card-title" style="color:var(--accent-light)"><i class="ph-fill ph-lightbulb"></i> Chave Grátis:
+        GPT-OSS-120B</div>
+      <p style="font-size:14px; color:var(--text-secondary); margin-bottom:20px;">O modelo <strong>GPT-OSS-120B</strong>
+        é 100% gratuito. Siga o passo a passo:</p>
+      <ul style="font-size:14px; color:var(--text-primary); margin-left:24px; margin-bottom:28px; line-height:1.8;">
+        <li>Acesse: <a href="#"
+            onclick="window.electronAPI.send('open-link', 'https://console.groq.com/keys'); return false;"
+            style="color:var(--accent-light); font-weight:600;">console.groq.com/keys</a></li>
+        <li>Crie sua conta gratuita.</li>
+        <li>Clique em <strong>"Create API Key"</strong>.</li>
+        <li>Copie o código <code>gsk_</code> e cole no campo.</li>
+      </ul>
+      <button class="btn btn-primary" style="width:100%;"
+        onclick="document.getElementById('groqTutorial').style.display='none'"><i class="ph-bold ph-check"></i>
+        Entendi!</button>
+    </div>
+  </div>
+
+  <!-- Modal RA Limit -->
+  <div id="raBlockModal" style="
+    display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    background: rgba(15, 23, 42, 0.92); backdrop-filter: blur(8px);
+    z-index: 2000; align-items: center; justify-content: center;
+  ">
+    <div class="card"
+      style="max-width: 520px; width: 90%; margin: 0; box-shadow: 0 25px 60px -12px rgba(245, 158, 11, 0.25); border: 1px solid rgba(245, 158, 11, 0.3); text-align: center;">
+      <div
+        style="width:72px;height:72px;border-radius:50%;margin:0 auto 20px;background:linear-gradient(135deg,rgba(245,158,11,0.2),rgba(217,119,6,0.1));border:2px solid rgba(245,158,11,0.4);display:flex;align-items:center;justify-content:center;font-size:32px;color:#f59e0b;">
+        <i class="ph-fill ph-users-three"></i>
+      </div>
+      <div class="card-title" id="raBlockTitle" style="color:#f59e0b;justify-content:center;font-size:18px;">⚠️ Limite
+        de Alunos Atingido</div>
+      <p id="raBlockDesc" style="font-size:14px;color:var(--text-secondary);margin-bottom:16px;line-height:1.7;">Esta
+        licença já atingiu o máximo de RAs permitidos. Faça upgrade para atender mais alunos.</p>
+      <div id="raBlockCounter"
+        style="display:none;background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.2);border-radius:10px;padding:14px 16px;margin-bottom:12px;font-size:14px;color:var(--text-secondary);">
+      </div>
+      <div
+        style="background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.2);border-radius:10px;padding:12px 16px;margin-bottom:20px;font-size:13px;color:var(--text-secondary);">
+        <div style="margin-bottom:4px;">RA recusado:</div>
+        <div style="font-size:16px;font-weight:700;color:#f87171;font-family:monospace;" id="raDetectedValue">—</div>
+      </div>
+      <a href="#" onclick="window.electronAPI.send('open-link', 'https://studiooryon.pro/ava-oryon'); return false;"
+        class="btn btn-primary"
+        style="width:100%;margin-bottom:8px;background:linear-gradient(135deg,#f59e0b,#d97706);box-shadow:0 4px 20px rgba(245,158,11,0.4);text-decoration:none;">
+        <i class="ph-bold ph-arrow-circle-up"></i> Upgrade para Plano Agência
+      </a>
+      <button onclick="document.getElementById('raBlockModal').style.display='none'" class="btn btn-ghost btn-sm"
+        style="width:100%;font-size:12px;">Fechar</button>
+    </div>
   </div>
 
   <!-- Footer -->
@@ -216,24 +524,16 @@
         <div class="footer-tagline">Automação Educacional Inteligente</div>
       </div>
       <div class="footer-links">
-        <a href="https://studiooryon.pro" target="_blank" rel="noopener"><i class="ph-bold ph-globe"></i> Website Oficial</a>
-        <a href="https://instagram.com/studiooryon" target="_blank" rel="noopener"><i class="ph-bold ph-instagram-logo"></i> @studiooryon</a>
-        <a href="#" id="link-privacidade"><i class="ph-bold ph-shield-check"></i> Privacidade & LGPD</a>
+        <a href="https://studiooryon.pro" target="_blank" rel="noopener"><i class="ph-bold ph-globe"></i> Website
+          Oficial</a>
+        <a href="https://instagram.com/studiooryon" target="_blank" rel="noopener"><i
+            class="ph-bold ph-instagram-logo"></i> @studiooryon</a>
       </div>
-      <div class="footer-copy">
-        &copy; 2026 Studio Oryon. Powered By Studio Oryon | studiooryon.pro
-      </div>
+      <div class="footer-copy">&copy; 2026 Studio Oryon. Powered By Studio Oryon | studiooryon.pro</div>
     </div>
   </footer>
 
-  <!-- Cookie Consent Bar -->
-  <div class="cookie-bar" id="cookieBar">
-    <div class="cookie-text">
-      <i class="ph-fill ph-cookie"></i> Este sistema opera inteiramente com processamento local e não utiliza cookies de rastreamento. Ao continuar, você aceita nossa <a href="#" onclick="window.electronAPI.send('open-privacy'); return false;">Política de Privacidade</a>.
-    </div>
-    <button class="btn btn-ghost btn-sm" onclick="acceptCookies()">Reconheço e Aceito</button>
-  </div>
-
   <script src="app.js"></script>
 </body>
+
 </html>

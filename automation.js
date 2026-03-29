@@ -291,19 +291,54 @@ async function launchBrowserWithFallback(headless, emit = () => {}) {
 // createSession — Inicia o Playwright browser
 // ══════════════════════════════════════════════════════════════
 
-async function createSession(emit = () => {}, showBrowser = true) {
+// Pool de User-Agents modernos para rotação anti-fingerprint
+const UA_POOL = [
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:124.0) Gecko/20100101 Firefox/124.0',
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:123.0) Gecko/20100101 Firefox/123.0',
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36 Edg/124.0.0.0',
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36 Edg/123.0.0.0',
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 14_4) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Safari/605.1.15',
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 OPR/106.0.0.0',
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 14_3_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:125.0) Gecko/20100101 Firefox/125.0',
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36 Edg/124.0.2478.80',
+];
+
+function getRandomUA() {
+  return UA_POOL[Math.floor(Math.random() * UA_POOL.length)];
+}
+
+async function createSession(emit = () => {}, showBrowser = true, opts = {}) {
+  const { rotateUA = false, liteMode = false } = opts;
   const id = Date.now().toString(36) + Math.random().toString(36).substring(2, 6);
   emit('log', '[ORYON] Iniciando sistema central (Browser)...');
 
   const browser = await launchBrowserWithFallback(!showBrowser, emit);
+
+  const chosenUA = rotateUA ? getRandomUA() : 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36';
+  if (rotateUA) {
+    emit('log', `[STEALTH] User-Agent rotacionado: ${chosenUA.substring(0, 60)}...`);
+  }
+
   const context = await browser.newContext({
     viewport: { width: 1366, height: 768 },
-    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36',
+    userAgent: chosenUA,
   });
   const page = await context.newPage();
   page.setDefaultTimeout(60000);
 
-  if (!showBrowser) {
+  // Lite Mode: Bloqueia mídias pesadas independente de visibilidade
+  if (liteMode) {
+    await page.route('**/*.{png,jpg,jpeg,gif,svg,webp,ico,bmp,woff,woff2,eot,ttf,otf}', route => route.abort());
+    emit('log', '[ULTRA-LITE] Alto desempenho ativado: mídias e fontes bloqueadas.');
+  } else if (!showBrowser) {
+    // Fallback legacy: headless sem lite mode bloqueia mídias mesmo assim
     await page.route('**/*.{png,jpg,jpeg,gif,svg,webp,css,woff,woff2,eot}', route => route.abort());
     emit('log', '[ORYON] Stealth Mode Ativado: Imagens e estilos bloqueados para otimização extrema.');
   }
@@ -375,6 +410,54 @@ async function login(sessionId, { login: username, senha }, emit = () => {}) {
   await safeWait(page);
   emit('log', `[SUCESSO] Login OK → ${page.url()}`);
 
+  // ═══ CAPTURAR RA DO PERFIL (PORTAL KROTON — ANTES DE IR AO AVA) ═══
+  emit('log', '[ORYON] 🔍 Capturando RA do perfil logado no portal...');
+  let capturedRA = null;
+  try {
+    // 1. Tentar expandir menu de avatar
+    const avatarSels = ['#avatar_menu', '.avatar-menu', '[id*="avatar"]', '.user-menu', '.profile-menu'];
+    for (const sel of avatarSels) {
+      try {
+        const el = page.locator(sel).first();
+        if (await el.isVisible({ timeout: 3000 }).catch(() => false)) {
+          await el.click({ timeout: 5000 });
+          emit('log', `[ORYON] Menu de perfil expandido via: ${sel}`);
+          await delay(1500);
+          break;
+        }
+      } catch {}
+    }
+
+    // 2. Extrair RA do DOM
+    capturedRA = await page.evaluate(() => {
+      // Estratégia 1: Seletor exato (div.ml-3 small.ng-binding)
+      const smallEls = document.querySelectorAll('div.ml-3 small.ng-binding, small.ng-binding, .ml-3 small');
+      for (const el of smallEls) {
+        const text = el.textContent || '';
+        const match = text.match(/RA:\s*(\d+)/i);
+        if (match) return match[1];
+      }
+      // Estratégia 2: Busca genérica
+      const allEls = document.querySelectorAll('small, span, div, p, li');
+      for (const el of allEls) {
+        const text = el.textContent || '';
+        const match = text.match(/RA:\s*(\d{5,})/i);
+        if (match) return match[1];
+      }
+      // Estratégia 3: Body text
+      const bodyMatch = (document.body.innerText || '').match(/RA:\s*(\d{5,})/i);
+      return bodyMatch ? bodyMatch[1] : null;
+    });
+
+    if (capturedRA) {
+      emit('log', `[SUCESSO] RA capturado do portal: ${capturedRA}`);
+    } else {
+      emit('log', '[AVISO] RA não encontrado no DOM do portal Kroton.');
+    }
+  } catch (e) {
+    emit('log', `[AVISO] Falha ao capturar RA: ${e.message}`);
+  }
+
   // ═══ CLICAR EM "ESTUDAR" E CAPTURAR NOVA ABA ═══
   emit('log', '[BUSCA] Procurando botão "Estudar"...');
   await delay(3000);
@@ -421,7 +504,7 @@ async function login(sessionId, { login: username, senha }, emit = () => {}) {
   }
 
   emit('status', 'logged_in');
-  return { success: true, url: session.page.url() };
+  return { success: true, url: session.page.url(), ra: capturedRA };
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -1271,6 +1354,76 @@ function analisarScore(avaliar, notas) {
 }
 
 // ══════════════════════════════════════════════════════════════
+// captureRA — Captura o RA do aluno logado via scraping do DOM
+// ══════════════════════════════════════════════════════════════
+
+async function captureRA(sessionId, emit = () => {}) {
+  const { page } = getSession(sessionId);
+  emit('log', '[ORYON] 🔍 Capturando RA do perfil logado no AVA...');
+
+  try {
+    // 1. Tentar clicar no menu de avatar para expandir o perfil
+    const avatarSels = ['#avatar_menu', '.avatar-menu', '[id*="avatar"]', '.user-menu', '.profile-menu'];
+    let clicked = false;
+    for (const sel of avatarSels) {
+      try {
+        const el = page.locator(sel).first();
+        if (await el.isVisible({ timeout: 3000 }).catch(() => false)) {
+          await el.click({ timeout: 5000 });
+          clicked = true;
+          emit('log', `[ORYON] Menu de perfil expandido via: ${sel}`);
+          await delay(1500);
+          break;
+        }
+      } catch {}
+    }
+
+    if (!clicked) {
+      emit('log', '[AVISO] Menu de avatar não encontrado. Tentando leitura direta do DOM...');
+    }
+
+    // 2. Extrair RA do DOM usando múltiplas estratégias
+    const raResult = await page.evaluate(() => {
+      // Estratégia 1: Seletor alvo exato (div.ml-3 small.ng-binding)
+      const smallEls = document.querySelectorAll('div.ml-3 small.ng-binding, small.ng-binding, .ml-3 small');
+      for (const el of smallEls) {
+        const text = el.textContent || '';
+        const match = text.match(/RA:\s*(\d+)/i);
+        if (match) return { ra: match[1], source: 'ng-binding' };
+      }
+
+      // Estratégia 2: Busca genérica em qualquer elemento visível
+      const allEls = document.querySelectorAll('small, span, div, p, li');
+      for (const el of allEls) {
+        const text = el.textContent || '';
+        // Verificar se o texto contém "RA:" seguido de números
+        const match = text.match(/RA:\s*(\d{5,})/i);
+        if (match) return { ra: match[1], source: 'generic-search' };
+      }
+
+      // Estratégia 3: Busca no HTML inteiro como fallback
+      const bodyText = document.body.innerText || '';
+      const bodyMatch = bodyText.match(/RA:\s*(\d{5,})/i);
+      if (bodyMatch) return { ra: bodyMatch[1], source: 'body-text' };
+
+      return null;
+    });
+
+    if (raResult && raResult.ra) {
+      emit('log', `[SUCESSO] RA capturado: ${raResult.ra} (via ${raResult.source})`);
+      return { success: true, ra: raResult.ra };
+    }
+
+    emit('log', '[AVISO] RA não encontrado no DOM do portal.');
+    return { success: false, ra: null };
+
+  } catch (e) {
+    emit('log', `[ERRO] Falha ao capturar RA: ${e.message}`);
+    return { success: false, ra: null };
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
 // destroySession — Fecha o navegador
 // ══════════════════════════════════════════════════════════════
 
@@ -1299,5 +1452,6 @@ module.exports = {
   getAtividades,
   clickItem,
   resolverAtividade,
+  captureRA,
   destroySession,
 };

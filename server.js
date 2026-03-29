@@ -98,9 +98,10 @@ app.post('/api/login', async (req, res) => {
 
     // Criar sessão se não existir
     if (!currentSession) {
-      const globalCfg = fs.existsSync(CONFIG_PATH) ? JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf-8')) : {};
-      const showBrowser = globalCfg.showBrowser !== undefined ? globalCfg.showBrowser : true;
-      currentSession = await auto.createSession(emit, showBrowser);
+      const showBrowser = req.body.showBrowser !== undefined ? req.body.showBrowser : true;
+      const rotateUA = req.body.rotateUA || false;
+      const liteMode = req.body.liteMode || false;
+      currentSession = await auto.createSession(emit, showBrowser, { rotateUA, liteMode });
     }
 
     const result = await auto.login(currentSession, { login, senha }, emit);

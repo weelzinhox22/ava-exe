@@ -98,7 +98,7 @@ function buildEmailHtml(licenseKey: string): string {
 
               <!-- Validade -->
               <p style="margin:0 0 24px;font-size:13px;color:#64748b;line-height:1.6;">
-                ⏳ Assinatura válida por <strong style="color:#f8fafc;">30 dias</strong> a partir de agora. Para renovar, acesse o link abaixo antes do vencimento.
+                ⏳ Assinatura válida por <strong style="color:#f8fafc;">3 meses</strong> a partir de agora. Para renovar, acesse o link abaixo antes do vencimento.
               </p>
 
               <!-- Botão CTA -->
@@ -138,11 +138,13 @@ function buildEmailHtml(licenseKey: string): string {
 </html>`;
 }
 
-// ── Handler principal ─────────────────────────────────────────
+// ── Handler principal (Checkout + Webhook Unificados) ─────────
 serve(async (req: Request) => {
   try {
+    // ── O Frontend (HTML) e a Coleta do E-mail agora moram no site externo (studiooryon.pro) ──
+    // ── O Mercado Pago mandará as notificações para esta ROTA POST (Webhook) ──────────
     if (req.method !== "POST") {
-      return new Response("Method not allowed", { status: 405 });
+      return new Response("Method not allowed. Use um POST de teste via plataforma MP ou curl.", { status: 405 });
     }
 
     // Validação por secret param (proteção anti-spam)
@@ -166,31 +168,65 @@ serve(async (req: Request) => {
       return new Response("Test OK", { status: 200 });
     }
 
-    if (type !== "payment" || !paymentId) {
-      return new Response("Ignored", { status: 200 });
-    }
+    let payerEmail = "";
+    let raLimit = 1;
+    let planType = "Estudante";
 
-    // ── Validar pagamento na API do Mercado Pago ──────────────
-    const mpRes = await fetch(`https://api.mercadopago.com/v1/payments/${paymentId}`, {
-      headers: { Authorization: `Bearer ${MP_ACCESS_TOKEN}` },
-    });
+    // ── Modo Teste de E-mail (Ignora o Mercado Pago) ──────────
+    if (String(paymentId) === "TESTE_EMAIL") {
+      console.log("🛠️ Modo Teste Ativado: Pulando validação do MP para testar Resend.");
+      payerEmail = bodyJson.record?.payer?.email || "teste@studiooryon.pro";
+      if (bodyJson.record?.ra_limit) raLimit = parseInt(bodyJson.record.ra_limit, 10) || 1;
+      if (raLimit > 1) planType = "Agência";
+    } else {
+      // ── Validar pagamento na API do Mercado Pago ──────────────
+      if (!MP_ACCESS_TOKEN) {
+        console.error("Falta a secret MP_ACCESS_TOKEN");
+        return new Response("Missing MP_ACCESS_TOKEN secret in Supabase", { status: 500 });
+      }
 
-    if (!mpRes.ok) {
-      console.error("Falha na API MP:", await mpRes.text());
-      return new Response("MP API error", { status: 502 });
-    }
+      const mpRes = await fetch(`https://api.mercadopago.com/v1/payments/${paymentId}`, {
+        headers: { Authorization: `Bearer ${MP_ACCESS_TOKEN}` },
+      });
 
-    const payment = await mpRes.json();
+      if (!mpRes.ok) {
+        const errorText = await mpRes.text();
+        const erroMsg = `Falha na API MP (Status ${mpRes.status}): ${errorText}`;
+        console.error(erroMsg);
+        return new Response(erroMsg, { status: 502 });
+      }
 
-    if (payment.status !== "approved") {
-      console.log(`Pagamento ${paymentId} não aprovado (status: ${payment.status}). Ignorando.`);
-      return new Response("Not approved", { status: 200 });
-    }
+      const payment = await mpRes.json();
 
-    const payerEmail = payment.payer?.email;
-    if (!payerEmail) {
-      console.error("E-mail do pagador não encontrado no payload do MP.");
-      return new Response("Email not found", { status: 200 });
+      if (payment.status !== "approved") {
+        console.log(`Pagamento ${paymentId} não aprovado (status: ${payment.status}). Ignorando.`);
+        return new Response("Not approved", { status: 200 });
+      }
+
+      // ── Extração do limite de RAs (Multi-RA) ───────────────
+      const limitRaw = payment.metadata?.ra_limit || payment.additional_info?.items?.[0]?.quantity || 1;
+      raLimit = parseInt(String(limitRaw), 10);
+      if (isNaN(raLimit) || raLimit < 1) raLimit = 1;
+
+      if (raLimit >= 2) {
+        planType = "Agência";
+      }
+
+      // ── Busca inteligente de E-mail (O Mercado Pago às vezes esconde o e-mail real com "XXXXX") ──
+      const candidates = [
+        payment.additional_info?.payer?.email,
+        payment.payer?.email,
+        payment.metadata?.email,
+        payment.metadata?.payer_email
+      ];
+
+      payerEmail = candidates.find(e => e && typeof e === 'string' && e.includes("@") && !e.includes("XXXX")) || "";
+
+      if (!payerEmail) {
+        console.error("E-mail real do pagador não encontrado no payload do MP (Pode ter vindo mascarado como XXXXXXXXXXX).");
+        // Não vamos interromper 100%, vamos salvar a licença mesmo sem email, para auditoria.
+        payerEmail = payment.payer?.email || "email.oculto@mercadopago.com"; 
+      }
     }
 
     // ── Idempotência: verificar se já processou este payment_id ──
@@ -205,18 +241,35 @@ serve(async (req: Request) => {
       return new Response("Already processed", { status: 200 });
     }
 
+    // ── Verificar se usuário já existe e obter user_id ──
+    let existingUserId = null;
+    if (payerEmail && payerEmail !== "email.oculto@mercadopago.com") {
+      try {
+        const { data: userIdRes } = await supabase.rpc("get_user_id_by_email", { email_to_check: payerEmail.trim() });
+        if (userIdRes) {
+          existingUserId = userIdRes;
+          console.log(`👤 Usuário encontrado: ${payerEmail} -> UUID vinculada automaticamente.`);
+        }
+      } catch (err) {
+        console.warn(`Aviso: falha ao buscar user UUID para ${payerEmail}`, err);
+      }
+    }
+
     // ── Gerar e persistir licença ─────────────────────────────
     const licenseKey = generateLicenseKey();
     const expiresAt  = new Date();
-    expiresAt.setDate(expiresAt.getDate() + 30);
+    expiresAt.setMonth(expiresAt.getMonth() + 3);
 
     const { error: dbError } = await supabase.from("licenses").insert({
       key:         licenseKey,
       active:      true,
       expires_at:  expiresAt.toISOString(),
       owner_email: payerEmail,
+      user_id:     existingUserId,
       payment_id:  String(paymentId),
       hwid:        null,
+      ra_limit:    raLimit,
+      plan_type:   planType
     });
 
     if (dbError) {
@@ -228,12 +281,18 @@ serve(async (req: Request) => {
 
     // ── Enviar e-mail via Resend API ──────────────────────────
     if (RESEND_API_KEY) {
-      const emailPayload = {
-        from:    `Studio Oryon <${FROM_EMAIL}>`,
-        to:      [payerEmail],
-        subject: "⚡ Sua Licença Studio Oryon — Acesso Liberado!",
-        html:    buildEmailHtml(licenseKey),
-      };
+      // Limpeza de espaços em branco invisíveis que podem quebrar o Resend
+      const safeEmail = payerEmail.trim();
+
+      if (!safeEmail.includes("@")) {
+        console.warn(`⚠️ O e-mail informado (${safeEmail}) é inválido. O envio do Resend foi cancelado para evitar erro 422, mas a licença foi gerada.`);
+      } else {
+        const emailPayload = {
+          from:    `Studio Oryon <${FROM_EMAIL}>`,
+          to:      [safeEmail],
+          subject: "⚡ Sua Licença Studio Oryon — Acesso Liberado!",
+          html:    buildEmailHtml(licenseKey),
+        };
 
       const emailRes = await fetch("https://api.resend.com/emails", {
         method:  "POST",
@@ -252,6 +311,7 @@ serve(async (req: Request) => {
         const resData = await emailRes.json();
         console.log(`📩 E-mail enviado para ${payerEmail}. Resend ID: ${resData.id}`);
       }
+      } // <- Fechamento do else (!safeEmail.includes("@"))
     } else {
       console.warn("RESEND_API_KEY não configurada — e-mail não enviado.");
     }
