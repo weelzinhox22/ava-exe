@@ -48,6 +48,7 @@ const els = {
   
   scoreCard: document.getElementById('scoreCard'),
   scoreValue: document.getElementById('scoreValue'),
+  scoreLabel: document.getElementById('scoreLabel'),
 };
 
 // ── Init & Auth ────────────────────────────────────────────
@@ -814,7 +815,6 @@ async function startResolver() {
 function showResult(data) {
   showStep(4);
   els.scoreCard.classList.add('visible');
-  els.scoreValue.textContent = data.score;
   
   // Limpa o conteúdo dinâmico para evitar duplicidade
   let menuHtml = `
@@ -828,8 +828,8 @@ function showResult(data) {
   if (data.notas && data.tempoEmpregado) {
     els.scoreCard.innerHTML = `
       <div style="font-size: 40px; margin-bottom: 12px;">🏆</div>
-      <div class="score-value">${data.score}</div>
-      <div class="score-label">Aproveitamento Final</div>
+      <div class="score-value" id="scoreValue">${data.score}</div>
+      <div class="score-label" id="scoreValue">Aproveitamento Final</div>
       <div style="background: rgba(0,0,0,0.2); border-radius: 8px; padding: 16px; margin-top: 20px; text-align: left; font-size: 13px; color: var(--text-secondary);">
         <div style="margin-bottom: 8px;"><strong>Estado:</strong> ${data.status || 'Finalizada'}</div>
         <div style="margin-bottom: 8px;"><strong>Tempo empregado:</strong> ${data.tempoEmpregado}</div>
@@ -842,7 +842,9 @@ function showResult(data) {
     `;
   } else {
     // Caso padrão: atualiza labels existentes e injeta botões
-    els.scoreLabel.textContent = 'Aproveitamento Final';
+    if (els.scoreValue) els.scoreValue.textContent = data.score;
+    if (els.scoreLabel) els.scoreLabel.textContent = 'Aproveitamento Final';
+    
     let menuEl = document.getElementById('postQuizMenu');
     if (menuEl) {
       menuEl.style.display = 'flex';
