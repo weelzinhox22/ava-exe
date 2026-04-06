@@ -118,6 +118,77 @@ async function limparBanners(page) {
 }
 
 // ══════════════════════════════════════════════════════════════
+// FECHAR MODAL DE COMUNICADOS DO AVA (OPCIONAL / SAZONAL)
+// O modal nem sempre aparece. A função faz uma verificação rápida:
+// se nenhum botão for encontrado em até 5s, prossegue normalmente.
+// Se o modal existir, navega pelos slides e fecha no final.
+// ══════════════════════════════════════════════════════════════
+
+async function fecharModalComunicados(page, emit = () => {}) {
+  try {
+    emit('log', '[ORYON] Verificando modal de comunicados do AVA (opcional)...');
+
+    // Seletor para o botão "Próximo comunicado" (visível apenas quando há mais slides)
+    const btnProximo = 'button.ng-scope[ng-click="c.nextSlide()"]';
+    // Seletor para o botão de fechar (visível apenas no último slide)
+    const btnFechar  = 'button.ng-scope[ng-click="c.closeModal()"]';
+
+    // ── Detecção rápida: aguarda até 5s por QUALQUER um dos dois botões ──
+    // Se nenhum aparecer, o modal não existe hoje → prossegue sem perder tempo.
+    const modalPresente = await Promise.race([
+      page.locator(btnProximo).first().waitFor({ state: 'visible', timeout: 5000 }).then(() => true).catch(() => false),
+      page.locator(btnFechar).first().waitFor({ state: 'visible', timeout: 5000 }).then(() => true).catch(() => false),
+    ]);
+
+    if (!modalPresente) {
+      emit('log', '[ORYON] Modal de comunicados não detectado. Prosseguindo normalmente.');
+      return;
+    }
+
+    emit('log', '[ORYON] Modal de comunicados detectado! Navegando pelos slides...');
+
+    // ── Loop pelos slides ──
+    let tentativas = 0;
+    const maxTentativas = 20; // Segurança: máximo de slides possíveis
+
+    while (tentativas < maxTentativas) {
+      // Tenta clicar em "Próximo comunicado" se visível
+      const proximo = page.locator(btnProximo).first();
+      const proximo_visivel = await proximo.isVisible().catch(() => false);
+
+      if (proximo_visivel) {
+        emit('log', `[ORYON] Modal: avançando slide (${tentativas + 1})...`);
+        await proximo.click({ force: true });
+        await delay(800);
+        tentativas++;
+        continue;
+      }
+
+      // Tenta clicar no botão de fechar (último slide)
+      const fechar = page.locator(btnFechar).first();
+      const fechar_visivel = await fechar.isVisible().catch(() => false);
+
+      if (fechar_visivel) {
+        emit('log', '[ORYON] Modal: último slide — fechando.');
+        await fechar.click({ force: true });
+        await delay(500);
+        emit('log', '[SUCESSO] Modal de comunicados fechado. Prosseguindo.');
+        return;
+      }
+
+      // Nenhum botão visível (modal fechou sozinho ou sumiu)
+      emit('log', '[ORYON] Modal encerrado. Prosseguindo.');
+      return;
+    }
+
+    emit('log', '[AVISO] Modal: limite de slides atingido. Prosseguindo mesmo assim.');
+  } catch (e) {
+    // Nunca bloqueia o fluxo principal por causa do modal
+    emit('log', `[ORYON] Modal de comunicados ignorado (não encontrado ou erro): ${e.message}`);
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
 // GOOGLE SEARCH — Pesquisa Externa (Nova Aba)
 // ══════════════════════════════════════════════════════════════
 
@@ -492,6 +563,8 @@ async function login(sessionId, { login: username, senha }, emit = () => {}) {
     await safeWait(avaPage);
     session.page = avaPage;
     emit('log', `[SUCESSO] AVA aberto na nova aba: ${avaPage.url()}`);
+    // Fechar modal de comunicados antes de prosseguir
+    await fecharModalComunicados(avaPage, emit);
   } else {
     await delay(5000);
     if (!page.url().includes('avaeduc.com.br')) {
@@ -501,6 +574,8 @@ async function login(sessionId, { login: username, senha }, emit = () => {}) {
     }
     await safeWait(page);
     emit('log', `[SUCESSO] AVA: ${page.url()}`);
+    // Fechar modal de comunicados antes de prosseguir (fallback path)
+    await fecharModalComunicados(page, emit);
   }
 
   emit('status', 'logged_in');

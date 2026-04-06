@@ -115,8 +115,10 @@ function setupAutoUpdater() {
     return;
   }
 
-  autoUpdater.autoDownload = false;          // Apenas notificar, não baixar sozinho
-  autoUpdater.autoInstallOnAppQuit = false;  // Instalar apenas quando o usuário pedir
+  // autoDownload = false: o download SÓ começa quando o usuário clicar "Atualizar"
+  // Isso evita o conflito que travava o botão (download duplo / estado inconsistente)
+  autoUpdater.autoDownload = false;
+  autoUpdater.autoInstallOnAppQuit = false;
 
   // Evento: update disponível
   autoUpdater.on('update-available', (info) => {
@@ -145,7 +147,7 @@ function setupAutoUpdater() {
     });
   });
 
-  // Evento: download concluído
+  // Evento: download concluído — emite e aguarda o usuário confirmar instalação
   autoUpdater.on('update-downloaded', (info) => {
     console.log(`[UPDATER] v${info.version} pronto para instalar.`);
     emit('updater', { status: 'downloaded', version: info.version });
@@ -409,6 +411,42 @@ ipcMain.handle('app:getNews', async () => {
   }
 });
 
+// ── Consentimento Legal (Termos de Uso) ──
+ipcMain.handle('auto:checkConsent', async (event, licenseKey) => {
+  if (!supabase) return { success: false, error: 'Database disconnected.' };
+  try {
+    const { data, error } = await supabase
+      .from('legal_consents')
+      .select('id')
+      .eq('license_key', licenseKey)
+      .limit(1);
+    if (error) throw error;
+    return { success: true, hasConsent: data && data.length > 0 };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
+ipcMain.handle('auto:saveConsent', async (event, { licenseKey, userEmail, typedText }) => {
+  if (!supabase) return { success: false, error: 'Database disconnected.' };
+  try {
+    const hwid = machineIdSync();
+    const { error } = await supabase
+      .from('legal_consents')
+      .insert([{
+        license_key: licenseKey,
+        user_email: userEmail,
+        typed_text: typedText,
+        hwid: hwid,
+        robot_version: app.getVersion()
+      }]);
+    if (error) throw error;
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
 ipcMain.handle('auto:validateLicense', async (event, payload) => {
   // Suporta chamada legada (string) e nova (objeto com ra)
   const licenseKey = typeof payload === 'string' ? payload : payload.licenseKey;
@@ -586,25 +624,34 @@ ipcMain.handle('shell:openHistorico', async () => {
 
 // ── IPC: Updater ──────────────────────────────────────────────
 ipcMain.handle('updater:check', async () => {
-  if (!app.isPackaged) return { status: 'dev-mode' };
   try {
+    if (!app.isPackaged) {
+      // Em modo dev, simular "up to date"
+      emit('updater', { status: 'up-to-date' });
+      return { status: 'up-to-date' };
+    }
     await autoUpdater.checkForUpdates();
     return { status: 'checking' };
   } catch (e) {
+    emit('updater', { status: 'error', message: e.message });
     return { status: 'error', message: e.message };
   }
 });
 
 ipcMain.handle('updater:download', async () => {
   try {
-    autoUpdater.downloadUpdate();
+    // Garante que não há download em andamento antes de iniciar
+    await autoUpdater.downloadUpdate();
     return { status: 'started' };
   } catch (e) {
+    console.error('[UPDATER] Falha ao baixar:', e.message);
+    emit('updater', { status: 'error', message: e.message });
     return { status: 'error', message: e.message };
   }
 });
 
 ipcMain.handle('updater:install', () => {
-  autoUpdater.quitAndInstall(false, true); // isSilent=false, isForceRunAfter=true
+  // isSilent=false → mostra o instalador | isForceRunAfter=true → reabre o app após instalar
+  autoUpdater.quitAndInstall(false, true);
 });
 

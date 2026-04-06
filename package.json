@@ -1,6 +1,6 @@
 {
   "name": "ava-automacao",
-  "version": "1.0.0",
+  "version": "1.1.4",
   "description": "Automação de questionário AVA Kroton com Playwright + Groq SDK",
   "main": "main.js",
   "scripts": {
@@ -36,8 +36,18 @@
       "node_modules/playwright-core/**/*",
       "node_modules/@playwright/**/*",
       "!node_modules/.bin",
+      "!node_modules/supabase",
+      "!node_modules/supabase/**/*",
       "!supabase",
-      "!.env*"
+      "!.env*",
+      "!**/*.map",
+      "!**/*.md",
+      "!**/*.ts",
+      "!**/LICENSE",
+      "!**/CHANGELOG*"
+    ],
+    "asarUnpack": [
+      "node_modules/playwright-core/**/*"
     ],
     "extraMetadata": {
       "main": "dist-main.js"
@@ -52,19 +62,19 @@
   "dependencies": {
     "@supabase/supabase-js": "^2.100.1",
     "chalk": "^4.1.2",
-    "cli-table3": "^0.6.5",
     "dotenv": "^16.6.1",
     "electron-updater": "^6.3.9",
     "express": "^5.2.1",
     "groq-sdk": "^0.8.0",
     "node-machine-id": "^1.1.12",
-    "playwright-core": "^1.58.2",
-    "supabase": "^2.84.4"
+    "playwright-core": "^1.58.2"
   },
   "devDependencies": {
+    "cli-table3": "^0.6.5",
     "electron": "^41.1.0",
     "electron-builder": "^26.8.1",
     "electron-store": "^8.1.0",
-    "esbuild": "^0.27.4"
+    "esbuild": "^0.27.4",
+    "supabase": "^2.84.4"
   }
 }

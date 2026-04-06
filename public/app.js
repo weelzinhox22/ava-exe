@@ -453,9 +453,39 @@ async function activateKey() {
   }
 }
 
-function launchSystem() {
+async function launchSystem() {
   if (!currentLicense || !currentLicense.active) return;
   
+  const btn = document.getElementById('btnLaunchSystem');
+  const oldText = btn.innerHTML;
+  btn.innerHTML = '<div class="spinner"></div> Processando...';
+  btn.disabled = true;
+
+  try {
+    // Verificar consentimento legal
+    const res = await window.electronAPI.invoke('auto:checkConsent', currentLicense.key);
+    if (!res.success) throw new Error(res.error);
+    
+    if (!res.hasConsent) {
+      // Exibir modal de consentimento
+      const modal = document.getElementById('modalConsentimento');
+      modal.style.display = 'flex';
+      // Animação de entrada
+      setTimeout(() => { modal.style.opacity = '1'; }, 10);
+      return; // Interrompe o lançamento
+    }
+
+    // Se tem consentimento, prosseguir
+    continueLaunchSystem();
+  } catch(err) {
+    alert("Erro ao validar termos de uso: " + err.message);
+  } finally {
+    btn.innerHTML = oldText;
+    btn.disabled = false;
+  }
+}
+
+function continueLaunchSystem() {
   // Salvar config do painel silenciosamente
   const groqKey = document.getElementById('inputGroqKey').value;
   const showBrowser = document.getElementById('checkShowBrowser').checked;
@@ -471,6 +501,63 @@ function launchSystem() {
   
   document.getElementById('licenseBadge').style.display = 'flex';
   document.getElementById('licenseText').innerText = currentLicense.plan_type;
+}
+
+// ── Lógica do Modal de Consentimento ──
+function checkConsentInput() {
+  const input = document.getElementById('inputConsent').value.trim().toLowerCase();
+  const btn = document.getElementById('btnConfirmConsent');
+  const err = document.getElementById('consentError');
+  
+  if (input === 'aceito') {
+    btn.disabled = false;
+    btn.style.opacity = '1';
+    btn.style.cursor = 'pointer';
+    err.style.display = 'none';
+  } else {
+    btn.disabled = true;
+    btn.style.opacity = '0.5';
+    btn.style.cursor = 'not-allowed';
+    if (input.length > 0 && input !== 'aceit' && input !== 'acei' && input !== 'ace' && input !== 'ac' && input !== 'a') {
+      err.style.display = 'block';
+    } else {
+      err.style.display = 'none';
+    }
+  }
+}
+
+function fecharConsentimento() {
+  const modal = document.getElementById('modalConsentimento');
+  modal.style.opacity = '0';
+  setTimeout(() => { modal.style.display = 'none'; }, 400); // Aguarda a transição css
+}
+
+async function confirmarConsentimento() {
+  const input = document.getElementById('inputConsent').value.trim().toLowerCase();
+  if (input !== 'aceito') return;
+
+  const btn = document.getElementById('btnConfirmConsent');
+  const oldText = btn.innerHTML;
+  btn.innerHTML = '<div class="spinner"></div> Registrando...';
+  btn.disabled = true;
+
+  try {
+    const res = await window.electronAPI.invoke('auto:saveConsent', {
+      licenseKey: currentLicense.key,
+      userEmail: currentUser.email,
+      typedText: 'aceito'
+    });
+    if (!res.success) throw new Error(res.error);
+    
+    // Sucesso, pode fechar e continuar
+    fecharConsentimento();
+    continueLaunchSystem();
+    
+  } catch(err) {
+    alert("Erro ao registrar consentimento: " + err.message);
+    btn.innerHTML = oldText;
+    btn.disabled = false;
+  }
 }
 
 function backToDashboard() {
@@ -866,6 +953,11 @@ function handleUpdaterEvent(data) {
     _updaterState = 'available';
     title.textContent = `⚡ Nova versão v${data.version} disponível!`; sub.textContent = 'Baixe e instale agora.';
     progress.style.display = 'none'; btnLabel.textContent = 'Atualizar Agora'; btn.disabled = false; bar.style.display = 'flex';
+  } else if (data.status === 'up-to-date') {
+    _updaterState = 'idle';
+    title.textContent = '✅ Você já está na versão mais recente!'; sub.textContent = 'Nenhuma atualização necessária.';
+    progress.style.display = 'none'; btn.style.display = 'none'; bar.style.display = 'flex';
+    setTimeout(() => { bar.style.display = 'none'; btn.style.display = 'inline-flex'; }, 4000);
   } else if (data.status === 'downloading') {
     _updaterState = 'downloading';
     title.textContent = `⏬ Baixando v... ${data.percent}%`; sub.textContent = `${data.transferred} MB / ${data.total} MB`;
@@ -875,17 +967,65 @@ function handleUpdaterEvent(data) {
     _updaterState = 'downloaded';
     title.textContent = `✅ Versão v${data.version} pronta!`; sub.textContent = 'Download concluído. Clique para reiniciar.';
     progBar.style.width = '100%'; progText.textContent = 'Concluído!'; btnLabel.textContent = 'Instalar e Reiniciar'; btn.disabled = false; bar.style.display = 'flex';
+  } else if (data.status === 'error') {
+    _updaterState = 'idle';
+    title.textContent = '⚠️ Erro ao verificar atualizações'; sub.textContent = data.message || 'Tente novamente mais tarde.';
+    progress.style.display = 'none'; btn.style.display = 'none'; bar.style.display = 'flex';
+    setTimeout(() => { bar.style.display = 'none'; btn.style.display = 'inline-flex'; }, 5000);
   }
 }
 async function handleUpdate() {
+  const btn = document.getElementById('btnUpdate');
+  const btnLabel = document.getElementById('btnUpdateLabel');
+
   if (_updaterState === 'available') {
-    await window.electronAPI.invoke('updater:download');
-    _updaterState = 'downloading';
-    document.getElementById('btnUpdateLabel').textContent = 'Baixando...';
-    document.getElementById('btnUpdate').disabled = true;
-  } else if (_updaterState === 'downloaded') {
-    if (confirm('O app vai reiniciar. Deseja continuar?')) {
-      window.electronAPI.invoke('updater:install');
+    // Bloqueia o botão imediatamente para evitar cliques duplos
+    btn.disabled = true;
+    btnLabel.textContent = 'Iniciando download...';
+    _updaterState = 'downloading'; // Antecipa o estado para evitar re-cliques
+
+    try {
+      await window.electronAPI.invoke('updater:download');
+      // O progresso real virá via handleUpdaterEvent (download-progress / update-downloaded)
+    } catch (err) {
+      // Se falhar, volta ao estado anterior
+      _updaterState = 'available';
+      btn.disabled = false;
+      btnLabel.textContent = 'Atualizar Agora';
+      document.getElementById('updateBarSub').textContent = 'Erro ao baixar. Tente novamente.';
     }
+
+  } else if (_updaterState === 'downloaded') {
+    // Instalar e reiniciar — sem confirm() que congela o Electron
+    btn.disabled = true;
+    btnLabel.textContent = 'Reiniciando...';
+    // Pequeno delay para a UI atualizar antes do processo fechar
+    setTimeout(() => {
+      window.electronAPI.invoke('updater:install');
+    }, 300);
+  }
+}
+
+async function checkForUpdates() {
+  const bar = document.getElementById('updateBar');
+  const title = document.getElementById('updateBarTitle');
+  const sub = document.getElementById('updateBarSub');
+  const btn = document.getElementById('btnUpdate');
+  const progress = document.getElementById('updateProgress');
+
+  // Mostrar barra temporária de "verificando..."
+  title.textContent = '🔄 Verificando atualizações...';
+  sub.textContent = 'Aguarde, consultando servidor de releases.';
+  progress.style.display = 'none';
+  btn.style.display = 'none';
+  bar.style.display = 'flex';
+
+  try {
+    await window.electronAPI.invoke('updater:check');
+    // O resultado real virá via SSE (handleUpdaterEvent)
+  } catch (err) {
+    title.textContent = '⚠️ Não foi possível verificar';
+    sub.textContent = 'Aplicação em modo desenvolvimento ou sem conexão.';
+    setTimeout(() => { bar.style.display = 'none'; btn.style.display = 'inline-flex'; }, 4000);
   }
 }

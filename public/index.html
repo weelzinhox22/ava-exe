@@ -117,8 +117,8 @@
           <nav class="dash-nav">
             <a href="#" id="navVisaoGeral" class="dash-nav-item active" onclick="switchDashTab('Overview'); return false;"><i class="ph-fill ph-squares-four"></i> Visão Geral</a>
             <a href="#" id="navNovidades" class="dash-nav-item" onclick="switchDashTab('News'); return false;"><i class="ph ph-newspaper"></i> Novidades</a>
-            <a href="#" class="dash-nav-item" onclick="document.getElementById('updateBar').style.display='flex'; return false;"><i class="ph ph-arrows-clockwise"></i> Buscar Atualizações</a>
-            <a href="#" class="dash-nav-item disabled" title="Em breve: Histórico de automações e logs"><i class="ph ph-file-text"></i> Histórico</a>
+            <a href="#" class="dash-nav-item" onclick="checkForUpdates(); return false;"><i class="ph ph-arrows-clockwise"></i> Buscar Atualizações</a>
+            <a href="#" class="dash-nav-item disabled" title="Aqui ficarão salvas as perguntas e respostas feitas pelo robô para você estudar ou revisar depois."><i class="ph ph-file-text"></i> Histórico</a>
             <a href="#" id="navAjustes" class="dash-nav-item" onclick="switchDashTab('Settings'); return false;"><i class="ph ph-gear-six"></i> Ajustes</a>
           </nav>
         </div>
@@ -513,6 +513,44 @@
       </a>
       <button onclick="document.getElementById('raBlockModal').style.display='none'" class="btn btn-ghost btn-sm"
         style="width:100%;font-size:12px;">Fechar</button>
+    </div>
+  </div>
+
+  <!-- Modal de Consentimento Legal -->
+  <div id="modalConsentimento"
+    style="display:none; position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(0,0,0,0.85); backdrop-filter:blur(12px); z-index:99999; justify-content:center; align-items:center; opacity:0; transition:opacity 0.4s ease;">
+    <div style="background:#0F172A; border:1px solid rgba(255,255,255,0.1); width:90%; max-width:550px; border-radius:24px; padding:32px; box-shadow:0 24px 60px rgba(0,0,0,0.6); transform:translateY(20px); transition:all 0.4s cubic-bezier(0.16, 1, 0.3, 1);" id="modalConsentBox">
+      
+      <div style="display:flex; align-items:center; gap:16px; margin-bottom:24px;">
+        <div style="width:56px; height:56px; border-radius:16px; background:rgba(239, 68, 68, 0.1); border:1px solid rgba(239, 68, 68, 0.2); display:flex; align-items:center; justify-content:center;">
+          <i class="ph-fill ph-warning-circle" style="font-size:32px; color:#ef4444;"></i>
+        </div>
+        <div>
+          <h2 style="font-size:22px; font-weight:800; color:#fff; margin:0 0 4px 0;">Termo de Ciência e Uso</h2>
+          <p style="font-size:13px; color:#94a3b8; margin:0;">Leitura obrigatória antes de iniciar o robô</p>
+        </div>
+      </div>
+
+      <div style="background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.05); padding:20px; border-radius:12px; max-height:220px; overflow-y:auto; font-size:13px; color:#cbd5e1; line-height:1.6; margin-bottom:24px;">
+        <p style="margin-top:0;">Ao prosseguir, você concorda que o Studio Oryon é uma ferramenta automatizada de assistência baseada em Inteligência Artificial.</p>
+        <p><strong>Atenção:</strong> Não nos responsabilizamos por eventuais erros ou falhas nas respostas do robô. Embora a taxa de acerto seja altíssima, o robô pode oscilar ou ser impreciso, <strong>especialmente em matérias com formatos livres ou interpretativos (como Português, Matemática avançada, etc)</strong>.</p>
+        <p>Caso alguma atividade resolvida pelo sistema não atinja a pontuação mínima necessária no portal AVA, <strong>sugerimos fortemente que refaça as tentativas manualmente</strong> a fim de assegurar seus pontos oficiais.</p>
+        <p style="margin-bottom:0;">Estamos melhorando a precisão em matérias livres. Ao usar o sistema, você endossa total consciência física e jurídica dessa limitação tecnológica.</p>
+      </div>
+
+      <div style="margin-bottom:24px;">
+        <label style="display:block; font-size:13px; font-weight:600; color:#e2e8f0; margin-bottom:8px;">Para concordar e prosseguir, digite a palavra <strong style="color:#60A5FA;">aceito</strong> abaixo:</label>
+        <input type="text" id="inputConsent" placeholder="Digite aceito" style="width:100%; background:rgba(0,0,0,0.4); border:1px solid rgba(255,255,255,0.1); padding:14px 16px; border-radius:12px; color:#fff; font-size:16px; text-transform:lowercase; outline:none; transition:border-color 0.2s;" oninput="checkConsentInput()">
+        <div id="consentError" style="color:#ef4444; font-size:12px; margin-top:8px; display:none; font-weight:600;"><i class="ph-bold ph-x-circle"></i> Palavra incorreta. Você deve digitar exatamentente 'aceito'.</div>
+      </div>
+
+      <div style="display:flex; justify-content:flex-end; gap:12px;">
+        <button class="btn btn-ghost" onclick="fecharConsentimento()">Cancelar</button>
+        <button id="btnConfirmConsent" class="btn btn-primary" style="opacity:0.5; cursor:not-allowed;" disabled onclick="confirmarConsentimento()">
+          Confirmar <i class="ph-bold ph-arrow-right"></i>
+        </button>
+      </div>
+
     </div>
   </div>
 

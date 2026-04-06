@@ -615,6 +615,37 @@ body {
 }
 .buy-link:hover { text-decoration: underline; }
 
+/* Sem Licença Alert */
+.dash-no-license {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  padding: 16px 24px;
+  border-radius: 16px;
+  margin-top: 24px;
+  color: #fca5a5;
+  font-size: 14px;
+  animation: fadeIn 0.4s ease;
+}
+.dash-no-license i {
+  font-size: 28px;
+  color: #ef4444;
+}
+.dash-no-license a {
+  color: #fff;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+  text-decoration-color: rgba(255, 255, 255, 0.3);
+  transition: all 0.2s;
+}
+.dash-no-license a:hover {
+  color: #a855f7;
+  text-decoration-color: #a855f7;
+}
+
 .help-link {
   display: inline-block;
   background: rgba(96, 165, 250, 0.1);
