@@ -529,6 +529,9 @@ async function login(sessionId, { login: username, senha }, emit = () => {}) {
     emit('log', `[AVISO] Falha ao capturar RA: ${e.message}`);
   }
 
+  // Fechar modal de comunicados no Portal (se existir) antes de clicar em Estudar
+  await fecharModalComunicados(page, emit);
+
   // ═══ CLICAR EM "ESTUDAR" E CAPTURAR NOVA ABA ═══
   emit('log', '[BUSCA] Procurando botão "Estudar"...');
   await delay(3000);
@@ -563,8 +566,6 @@ async function login(sessionId, { login: username, senha }, emit = () => {}) {
     await safeWait(avaPage);
     session.page = avaPage;
     emit('log', `[SUCESSO] AVA aberto na nova aba: ${avaPage.url()}`);
-    // Fechar modal de comunicados antes de prosseguir
-    await fecharModalComunicados(avaPage, emit);
   } else {
     await delay(5000);
     if (!page.url().includes('avaeduc.com.br')) {
@@ -574,8 +575,6 @@ async function login(sessionId, { login: username, senha }, emit = () => {}) {
     }
     await safeWait(page);
     emit('log', `[SUCESSO] AVA: ${page.url()}`);
-    // Fechar modal de comunicados antes de prosseguir (fallback path)
-    await fecharModalComunicados(page, emit);
   }
 
   emit('status', 'logged_in');
