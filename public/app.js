@@ -815,6 +815,16 @@ function showResult(data) {
   showStep(4);
   els.scoreCard.classList.add('visible');
   els.scoreValue.textContent = data.score;
+  
+  // Limpa o conteúdo dinâmico para evitar duplicidade
+  let menuHtml = `
+    <button class="btn btn-primary" onclick="refazerQuestionario()"><i class="ph-bold ph-arrows-clockwise"></i> Refazer este Questionário</button>
+    <button class="btn btn-success" onclick="voltarSeccoes()"><i class="ph-bold ph-arrow-u-up-left"></i> Voltar para Unidade Atual</button>
+    <button class="btn btn-ghost" onclick="voltarDisciplinas()"><i class="ph-bold ph-house"></i> Voltar para Disciplinas</button>
+    <button class="btn btn-ghost" onclick="abrirHistorico()" style="border-color: rgba(250,204,21,0.4); color: #fbbf24;"><i class="ph-bold ph-folder-open"></i> Ver Histórico de Respostas</button>
+    <button class="btn btn-danger" onclick="sairFechar()"><i class="ph-bold ph-sign-out"></i> Encerrar Sessão</button>
+  `;
+
   if (data.notas && data.tempoEmpregado) {
     els.scoreCard.innerHTML = `
       <div style="font-size: 40px; margin-bottom: 12px;">🏆</div>
@@ -826,26 +836,20 @@ function showResult(data) {
         <div style="margin-bottom: 8px;"><strong>Notas brutas:</strong> ${data.notas}</div>
         <div><strong>Total de questões respondidas:</strong> ${data.total}</div>
       </div>
-      <div class="post-quiz-menu" id="postQuizMenu" style="margin-top: 16px; display: flex; flex-direction: column; gap: 8px;">
-        <button class="btn btn-primary" onclick="refazerQuestionario()"><i class="ph-bold ph-arrows-clockwise"></i> Refazer este Questionário</button>
-        <button class="btn btn-success" onclick="voltarSeccoes()"><i class="ph-bold ph-arrow-u-up-left"></i> Voltar para Unidade Atual</button>
-        <button class="btn btn-ghost" onclick="voltarDisciplinas()"><i class="ph-bold ph-house"></i> Voltar para Disciplinas</button>
-        <button class="btn btn-ghost" onclick="abrirHistorico()" style="border-color: rgba(250,204,21,0.4); color: #fbbf24;"><i class="ph-bold ph-folder-open"></i> Ver Histórico de Respostas</button>
+      <div class="post-quiz-menu" id="postQuizMenu" style="margin-top: 24px; display: flex; flex-direction: column; gap: 8px;">
+        ${menuHtml}
       </div>
     `;
   } else {
-    let menuEl = els.scoreCard.querySelector('#postQuizMenuDefault');
-    if (!menuEl) {
-      menuEl = document.createElement('div');
-      menuEl.id = 'postQuizMenuDefault';
-      menuEl.style.cssText = 'margin-top: 16px; display: flex; flex-direction: column; gap: 8px;';
-      menuEl.innerHTML = `
-        <button class="btn btn-primary" onclick="refazerQuestionario()"><i class="ph-bold ph-arrows-clockwise"></i> Refazer este Questionário</button>
-        <button class="btn btn-success" onclick="voltarSeccoes()"><i class="ph-bold ph-arrow-u-up-left"></i> Voltar para Unidade Atual</button>
-        <button class="btn btn-ghost" onclick="voltarDisciplinas()"><i class="ph-bold ph-house"></i> Voltar para Disciplinas</button>
-        <button class="btn btn-ghost" onclick="abrirHistorico()" style="border-color: rgba(250,204,21,0.4); color: #fbbf24;"><i class="ph-bold ph-folder-open"></i> Ver Histórico de Respostas</button>
-      `;
-      els.scoreCard.appendChild(menuEl);
+    // Caso padrão: atualiza labels existentes e injeta botões
+    els.scoreLabel.textContent = 'Aproveitamento Final';
+    let menuEl = document.getElementById('postQuizMenu');
+    if (menuEl) {
+      menuEl.style.display = 'flex';
+      menuEl.style.flexDirection = 'column';
+      menuEl.style.gap = '8px';
+      menuEl.style.marginTop = '24px';
+      menuEl.innerHTML = menuHtml;
     }
   }
 }

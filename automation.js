@@ -55,15 +55,20 @@ const GROQ_MODEL = 'openai/gpt-oss-120b';
 
 async function askGroq(apiKey, disciplina, questionText, numberedAlts) {
   // Truncar inputs para não estourar o limite de 8000 TPM do plano free
-  // A resposta é apenas o texto de uma alternativa — não precisa de mais de 512 tokens de saída
-  const questionTruncated = questionText.substring(0, 1200);
-  const altsTruncated     = numberedAlts.substring(0, 1000);
+  const questionTruncated = questionText.substring(0, 1000);
+  const altsTruncated     = numberedAlts.substring(0, 800);
 
   const prompt = `Você é um professor de ${disciplina || 'Ensino Superior'}.
 QUESTÃO: ${questionTruncated}
 OPÇÕES:
 ${altsTruncated}
-INSTRUÇÃO: Responda APENAS com o texto exato da alternativa correta. Sem explicações, sem letras, sem numeração.`;
+
+INSTRUÇÕES:
+1. Identifique a alternativa correta.
+2. Forneça uma breve explicação (máx 2 parágrafos).
+3. Responda EXATAMENTE no formato abaixo:
+RESPOSTA: [texto exato da alternativa]
+EXPLICAÇÃO: [sua explicação aqui]`;
 
   console.log('\n--- PROMPT ENVIADO AO GROQ ---');
   console.log(prompt.substring(0, 400));
@@ -73,30 +78,54 @@ INSTRUÇÃO: Responda APENAS com o texto exato da alternativa correta. Sem expli
     const client = new Groq({ apiKey });
 
     // openai/gpt-oss-120b REQUER stream:true + reasoning_effort.
-    // max_completion_tokens: 512 é suficiente (resposta = texto de 1 alternativa).
-    // reasoning_effort: 'low' economiza tokens internos de raciocínio.
+    // Aumentado para 1024 tokens para acomodar a explicação.
     const stream = await client.chat.completions.create({
       model: GROQ_MODEL,
       messages: [{ role: 'user', content: prompt }],
-      temperature: 1,
-      max_completion_tokens: 512,
+      temperature: 0.7, // Reduzido para maior precisão técnica
+      max_completion_tokens: 1024,
       top_p: 1,
       stream: true,
       reasoning_effort: 'low',
       stop: null,
     });
 
-    // Consome o stream e concatena todos os chunks de texto
-    let answer = '';
+    let fullText = '';
     for await (const chunk of stream) {
-      answer += chunk.choices[0]?.delta?.content || '';
+      fullText += chunk.choices[0]?.delta?.content || '';
     }
-    answer = answer.trim();
-    console.log(`GROQ RAW RESPONSE: "${answer}"`);
-    return answer;
+    
+    console.log(`GROQ RAW RESPONSE:\n${fullText.trim()}`);
+
+    // Parsing da resposta estruturada
+    let answer = '';
+    let explanation = 'Não informada.';
+
+    const lines = fullText.split('\n');
+    for (const line of lines) {
+      if (line.toUpperCase().startsWith('RESPOSTA:')) {
+        answer = line.split(/RESPOSTA:/i)[1].trim();
+      } else if (line.toUpperCase().startsWith('EXPLICAÇÃO:')) {
+        explanation = line.split(/EXPLICAÇÃO:/i)[1].trim();
+      } else if (explanation === 'Não informada.' && answer !== '' && line.trim() !== '') {
+        // Se já temos a resposta e a linha não é vazia, pode ser parte da explicação residual
+        explanation = line.trim();
+      }
+    }
+
+    // Se falhou o prefixo, tenta pegar o que vier antes de "EXPLICAÇÃO" como resposta
+    if (!answer && fullText.includes('EXPLICAÇÃO:')) {
+       answer = fullText.split(/EXPLICAÇÃO:/i)[0].replace(/RESPOSTA:/i, '').trim();
+       explanation = fullText.split(/EXPLICAÇÃO:/i)[1].trim();
+    }
+
+    return { 
+      answer: answer || fullText.trim(), 
+      explanation: explanation 
+    };
   } catch (e) {
     console.error(`[ERRO GROQ] ${e.message}`);
-    return '';
+    return { answer: '', explanation: '' };
   }
 }
 
@@ -942,24 +971,49 @@ async function resolverAtividade(sessionId, disciplina, groqKey, emit = () => {}
   // Iniciar questionário
   emit('log', '📝 Iniciando questionário...');
   try {
-    await clickByText(page, 'TENTAR RESPONDER O QUESTIONÁRIO AGORA');
-  } catch {
-    try { await clickByText(page, 'Tentar responder o questionário agora'); } catch {
-      emit('log', '[AVISO] Nenhuma tentativa inédita solicitada.');
+    // 1. Tentar primeiro continuar uma tentativa em progresso (Prioridade solicitada pelo usuário)
+    const continuarSels = [
+      'text=/Continuar a última tentativa/i',
+      'text=/Continuar a tentativa anterior/i',
+      'button:has-text("Continuar")',
+      'input[value*="Continuar"]'
+    ];
+    
+    let continuou = false;
+    for (const sel of continuarSels) {
+      try {
+        const btn = page.locator(sel).first();
+        if (await btn.isVisible({ timeout: 2000 }).catch(() => false)) {
+          await btn.click();
+          emit('log', '[SISTEMA] Continuando tentativa anterior...');
+          continuou = true;
+          break;
+        }
+      } catch {}
     }
+
+    if (!continuou) {
+      // 2. Se não houver para continuar, tentar iniciar novo
+      try {
+        await clickByText(page, 'TENTAR RESPONDER O QUESTIONÁRIO AGORA', { timeout: 5000 });
+      } catch {
+        try { 
+          await clickByText(page, 'Tentar responder o questionário agora', { timeout: 3000 }); 
+        } catch {
+          // 3. Tentar também o botão de Refazer
+          const refazer = page.locator('button:has-text("Fazer uma outra tentativa")').first();
+          if (await refazer.isVisible({ timeout: 2000 }).catch(() => false)) {
+             await refazer.click();
+             emit('log', '[SISTEMA] Iniciando nova tentativa de questionário...');
+          } else {
+             emit('log', '[AVISO] Nenhum botão de início/continuação detectado. Verifique se o questionário já está aberto.');
+          }
+        }
+      }
+    }
+  } catch (err) {
+    emit('log', `[AVISO] Falha ao gerenciar início do questionário: ${err.message}`);
   }
-  
-  // Tentar também o botão "Continuar a tentativa anterior" se existir
-  try { await clickByText(page, 'Continuar a tentativa anterior', { retries: 1 }); } catch {}
-  
-  // Suporte ao botão de Refazer
-  try {
-    const refazer = page.locator('button:has-text("Fazer uma outra tentativa")');
-    if (await refazer.isVisible().catch(() => false)) {
-      await refazer.click();
-      emit('log', '[SISTEMA] Refazendo questionário (nova tentativa)...');
-    }
-  } catch {}
   
   await safeWait(page);
   await delay(1000);
@@ -1065,17 +1119,20 @@ async function resolverAtividade(sessionId, disciplina, groqKey, emit = () => {}
     // 3a. PRIMÁRIO: Groq API com Retry e Anti-Bias A
     emit('log', `[ORYON] Estabilizando motor de raciocínio 120B...`);
 
+    let explanationText = 'Não informada.';
+
     for (let attempt = 1; attempt <= 3; attempt++) {
       let questionQuery = text;
       
       if (attempt > 1) {
         emit('log', `[AVISO] Match fraco na Letra A detectado. Reiniciando raciocínio... (Tentativa ${attempt}/3)`);
-        questionQuery = text + `\n\nATENÇÃO: Não responda com números (ex: "1") ou letras isoladas (ex: "A"). Retorne APENAS o texto completo da alternativa EXATA correspondente, sem explicações adicionais. Seja muito mais específico.`;
       } else {
         emit('log', `[ORYON] Analisando questão...`);
       }
 
-      iaResponse = await askGroq(groqKey, disciplina, questionQuery, formattedAlts);
+      const groqRes = await askGroq(groqKey, disciplina, questionQuery, formattedAlts);
+      iaResponse = groqRes.answer;
+      explanationText = groqRes.explanation;
       
       if (!iaResponse) continue;
 
@@ -1220,6 +1277,9 @@ async function resolverAtividade(sessionId, disciplina, groqKey, emit = () => {}
           '',
           `RESPOSTA ESCOLHIDA (Studio Oryon):`,
           targetOpt.textoOriginal,
+          '',
+          `EXPLICAÇÃO (ORYON):`,
+          explanationText,
           '',
           `CONFIANCA / SIMILARIDADE: ${finalMatchPerc}%`,
           '',
