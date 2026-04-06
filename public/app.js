@@ -830,8 +830,31 @@ function showResult(data) {
         <button class="btn btn-primary" onclick="refazerQuestionario()"><i class="ph-bold ph-arrows-clockwise"></i> Refazer este Questionário</button>
         <button class="btn btn-success" onclick="voltarSeccoes()"><i class="ph-bold ph-arrow-u-up-left"></i> Voltar para Unidade Atual</button>
         <button class="btn btn-ghost" onclick="voltarDisciplinas()"><i class="ph-bold ph-house"></i> Voltar para Disciplinas</button>
+        <button class="btn btn-ghost" onclick="abrirHistorico()" style="border-color: rgba(250,204,21,0.4); color: #fbbf24;"><i class="ph-bold ph-folder-open"></i> Ver Histórico de Respostas</button>
       </div>
     `;
+  } else {
+    let menuEl = els.scoreCard.querySelector('#postQuizMenuDefault');
+    if (!menuEl) {
+      menuEl = document.createElement('div');
+      menuEl.id = 'postQuizMenuDefault';
+      menuEl.style.cssText = 'margin-top: 16px; display: flex; flex-direction: column; gap: 8px;';
+      menuEl.innerHTML = `
+        <button class="btn btn-primary" onclick="refazerQuestionario()"><i class="ph-bold ph-arrows-clockwise"></i> Refazer este Questionário</button>
+        <button class="btn btn-success" onclick="voltarSeccoes()"><i class="ph-bold ph-arrow-u-up-left"></i> Voltar para Unidade Atual</button>
+        <button class="btn btn-ghost" onclick="voltarDisciplinas()"><i class="ph-bold ph-house"></i> Voltar para Disciplinas</button>
+        <button class="btn btn-ghost" onclick="abrirHistorico()" style="border-color: rgba(250,204,21,0.4); color: #fbbf24;"><i class="ph-bold ph-folder-open"></i> Ver Histórico de Respostas</button>
+      `;
+      els.scoreCard.appendChild(menuEl);
+    }
+  }
+}
+
+async function abrirHistorico() {
+  try {
+    await window.electronAPI.openHistorico();
+  } catch (e) {
+    addLog('[AVISO] Não foi possível abrir a pasta de histórico: ' + e.message);
   }
 }
 

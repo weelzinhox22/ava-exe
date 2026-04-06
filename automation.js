@@ -54,27 +54,44 @@ async function screenshotToBase64(page) {
 const GROQ_MODEL = 'openai/gpt-oss-120b';
 
 async function askGroq(apiKey, disciplina, questionText, numberedAlts) {
-  const prompt = `Atue como um Professor de ${disciplina || 'Ensino Superior'}.
-QUESTÃO: ${questionText}
+  // Truncar inputs para não estourar o limite de 8000 TPM do plano free
+  // A resposta é apenas o texto de uma alternativa — não precisa de mais de 512 tokens de saída
+  const questionTruncated = questionText.substring(0, 1200);
+  const altsTruncated     = numberedAlts.substring(0, 1000);
+
+  const prompt = `Você é um professor de ${disciplina || 'Ensino Superior'}.
+QUESTÃO: ${questionTruncated}
 OPÇÕES:
-${numberedAlts}
-INSTRUÇÃO CRÍTICA: Retorne APENAS o texto exato da opção correta, copiado caractere por caractere. Não use letras (A, B, C). Não explique. Não adicione nada. Apenas o texto da alternativa.`;
+${altsTruncated}
+INSTRUÇÃO: Responda APENAS com o texto exato da alternativa correta. Sem explicações, sem letras, sem numeração.`;
 
   console.log('\n--- PROMPT ENVIADO AO GROQ ---');
-  console.log(prompt.substring(0, 500));
+  console.log(prompt.substring(0, 400));
   console.log('--- FIM DO PROMPT ---\n');
 
   try {
     const client = new Groq({ apiKey });
-    const completion = await client.chat.completions.create({
+
+    // openai/gpt-oss-120b REQUER stream:true + reasoning_effort.
+    // max_completion_tokens: 512 é suficiente (resposta = texto de 1 alternativa).
+    // reasoning_effort: 'low' economiza tokens internos de raciocínio.
+    const stream = await client.chat.completions.create({
       model: GROQ_MODEL,
       messages: [{ role: 'user', content: prompt }],
       temperature: 1,
-      max_completion_tokens: 8192,
+      max_completion_tokens: 512,
       top_p: 1,
-      stream: false,
+      stream: true,
+      reasoning_effort: 'low',
+      stop: null,
     });
-    const answer = (completion.choices?.[0]?.message?.content || '').trim();
+
+    // Consome o stream e concatena todos os chunks de texto
+    let answer = '';
+    for await (const chunk of stream) {
+      answer += chunk.choices[0]?.delta?.content || '';
+    }
+    answer = answer.trim();
     console.log(`GROQ RAW RESPONSE: "${answer}"`);
     return answer;
   } catch (e) {
